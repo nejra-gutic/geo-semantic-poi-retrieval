@@ -1,127 +1,77 @@
-# Geo Semantic Retrieval Pipeline for OSM POIs
+# Geo-Semantic POI Retrieval
 
-This project focuses on building a geo-semantic retrieval pipeline for OpenStreetMap (OSM) Points of Interest data.
+A pipeline for mapping natural language user queries to relevant Points of Interest (POIs) using a combination of text matching, semantic similarity, rule-based filtering, and geospatial logic.
 
-The goal is to map a natural language user query to a ranked list of relevant POIs by combining textual, semantic, rule-based, and geospatial logic.
+## Project Goal
 
-## Project Idea
+**Input:** Natural language user query (e.g. "wheelchair accessible Italian restaurant open on weekends")  
+**Output:** Ranked list of matching POIs from an OSM dataset
 
-Input:
+## Approach
 
-```text
-user query
-```
-
-Example:
-
-```text
-pizza places open now with wheelchair access
-```
-
-Output:
-
-```text
-ranked list of relevant POIs
-```
-
-The system is designed to combine several retrieval components:
-
-- text matching between user queries and POI textual attributes
-- rule-based filtering for structured fields such as opening hours and wheelchair access
-- semantic matching using embeddings
-- geospatial logic based on POI locations and geometry representations
-
-## Current Focus
-
-The current stage of the project focuses on preparing clean and structured OSM data that can later be used for retrieval.
-
-Main preprocessing goals:
-
-- preserve original OSM fields
-- create normalized versions of important attributes
-- standardize POI categories
-- normalize textual attributes for search
-- parse and structure fields such as cuisine, wheelchair access, and opening hours
-- create joined text fields for comparison with user input
-- prepare geometry representations for spatial logic
-- save processed data in both CSV and GeoJSON formats
-
-## Current Work
-
-So far, the project includes:
-
-- OSM dataset exploration
-- missing value analysis
-- category inspection and standardization
-- wheelchair attribute normalization
-- opening hours analysis and basic normalization
-- text preprocessing for NLP tasks
-- TF-IDF vectorization
-- n-gram experiments
-- sparsity analysis of TF-IDF matrices
-
-## Planned Pipeline
-
-```text
-Raw OSM data
-     ↓
-Column-specific preprocessing
-     ↓
-Structured and normalized POI dataset
-     ↓
-Query preprocessing
-     ↓
-Text matching + rule-based filters + semantic matching + geo logic
-     ↓
-Ranked POI results
-```
+- **Rule-based filtering** — structured flags (wheelchair, opening hours, takeaway, etc.)
+- **Text matching** — TF-IDF over joined POI text fields
+- **Semantic similarity** — embeddings for deeper query understanding (later stage)
+- **Geo component** — spatial proximity and layout (later stage)
 
 ## Project Structure
 
-```text
-osm-poi-nlp-search/
-│
-├── data/
-│   ├── raw/
-│   └── processed/
-│
-├── notebooks/
-│
+```
+geo-semantic-poi-retrieval/
 ├── src/
 │   ├── preprocessing/
-│   ├── retrieval/
-│   ├── geo/
+│   │   ├── clean.py          # null handling, unknown values
+│   │   ├── normalize.py      # unidecode, lowercasing, regex
+│   │   ├── geometry.py       # centroid extraction, lat/lon
+│   │   ├── address.py        # address parsing (libpostal/usaddress)
+│   │   ├── opening_hours.py  # hours parsing + boolean flags
+│   │   ├── cuisine.py        # cuisine tag normalization
+│   │   ├── flags.py          # wheelchair, takeaway → booleans
+│   │   ├── text_join.py      # joins text fields → poi_text
+│   │   └── pipeline.py       # runs the full preprocessing pipeline
+│   ├── retrieval/            # TF-IDF, embeddings (later)
 │   └── utils/
-│
-├── reports/
-│
-├── README.md
+│       └── io.py             # load/save CSV and GeoJSON
+├── data/
+│   ├── raw/                  # original OSM exports (.gitignored)
+│   ├── processed/            # cleaned outputs
+│   └── samples/              # small samples for testing (committed)
+├── notebooks/                # exploration notebooks (numbered)
+├── outputs/
+├── tests/
 ├── requirements.txt
 └── .gitignore
 ```
 
-## Technologies
+## Setup
 
-Current and planned tools:
+```bash
+pip install -r requirements.txt
+python -m spacy download en_core_web_sm
+```
 
-- Python
-- Pandas
-- GeoPandas
-- Shapely
-- Scikit-learn
-- TF-IDF
-- NLP preprocessing
-- embeddings
-- Google Colab
+## Running the Pipeline
 
-Potential libraries for later stages:
+```python
+from src.preprocessing.pipeline import run_pipeline
+import pandas as pd
 
-- unidecode
-- opening-hours parsing libraries
-- address parsing libraries
-- Hugging Face embeddings
-- vector search libraries
+df = pd.read_csv("data/raw/pois_portland.csv")
+df_processed = run_pipeline(df)
+df_processed.to_csv("data/processed/pois_processed.csv", index=False)
+```
+
+## Data Source
+
+OpenStreetMap data for Portland, Oregon, USA — fetched via `osmnx`.
 
 ## Status
 
-Project is currently in active development as part of the AtlantBH Internship Program.
+- [x] Data acquisition & EDA
+- [x] Cleaning & normalization
+- [x] Tokenization & linguistic processing
+- [x] TF-IDF + n-gram analysis
+- [ ] Preprocessing pipeline refactor (in progress)
+- [ ] Embedding-based retrieval
+- [ ] Geo component
+- [ ] Query interface
