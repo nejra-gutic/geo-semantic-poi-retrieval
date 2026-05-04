@@ -1,63 +1,61 @@
 """
-flags.py
---------
-Converts structured OSM boolean-like fields into clean boolean values.
+preprocessing/flags.py
+----------------------
+Converts OSM boolean-like text attributes into clean binary (0/1) flags.
 
-Fields handled:
-  - wheelchair  → wheelchair_accessible (True / False / None)
-  - takeaway    → has_takeaway          (True / False / None)
-
-None = unknown/not specified (different from False = explicitly no)
+Handles:
+  - wheelchair: yes / designated -> 1, else 0
+  - takeaway:   yes / only       -> 1, else 0
 """
 
 import pandas as pd
 
 
-def parse_osm_bool(value) -> bool | None:
-    """
-    Parses OSM yes/no/limited values into Python booleans.
-    
-    Returns:
-      True  → "yes", "designated"
-      False → "no"
-      None  → anything else (unknown, missing, "limited" treated as None)
-    """
+def parse_wheelchair(value) -> int:
+    """Return 1 if wheelchair accessible, 0 otherwise."""
     if pd.isna(value):
-        return None
-
+        return 0
     v = str(value).strip().lower()
-
-    if v in {"yes", "designated"}:
-        return True
-    elif v == "no":
-        return False
-    elif v == "limited":
-        return None  # keep as unknown, could be partially accessible
-    else:
-        return None
+    return 1 if v in {"yes", "designated"} else 0
 
 
-def apply_flags(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Applies boolean flag parsing.
+def parse_takeaway(value) -> int:
+    """Return 1 if takeaway available, 0 otherwise."""
+    if pd.isna(value):
+        return 0
+    v = str(value).strip().lower()
+    return 1 if v in {"yes", "only"} else 0
 
-    Input:  df with 'wheelchair' and/or 'takeaway' columns
-    Output: df with:
-              wheelchair_accessible  (True / False / None)
-              has_takeaway           (True / False / None)
 
-    Preserves original columns.
-    """
+def add_wheelchair_flag(df: pd.DataFrame) -> pd.DataFrame:
+    """Add wheelchair_clean binary column."""
     df = df.copy()
+    if "wheelchair" not in df.columns:
+        print("[flags] Warning - 'wheelchair' column not found, setting to 0")
+        df["wheelchair_accessible"] = 0
+        return df
 
-    if "wheelchair" in df.columns:
-        df["wheelchair_accessible"] = df["wheelchair"].apply(parse_osm_bool)
-        counts = df["wheelchair_accessible"].value_counts(dropna=False)
-        print(f"[flags.py] wheelchair_accessible:\n{counts.to_string()}\n")
+    df["wheelchair_accessible"] = df["wheelchair"].apply(parse_wheelchair)
+    accessible = df["wheelchair_accessible"].sum()
+    print(f"[flags] Wheelchair accessible: {accessible} / {len(df)} ({round(accessible/len(df)*100,1)}%)")
+    return df
 
-    if "takeaway" in df.columns:
-        df["has_takeaway"] = df["takeaway"].apply(parse_osm_bool)
-        counts = df["has_takeaway"].value_counts(dropna=False)
-        print(f"[flags.py] has_takeaway:\n{counts.to_string()}\n")
 
+def add_takeaway_flag(df: pd.DataFrame) -> pd.DataFrame:
+    """Add takeaway_clean binary column."""
+    df = df.copy()
+    if "takeaway" not in df.columns:
+        print("[flags] Warning - 'takeaway' column not found, setting to 0")
+        df["has_takeaway"] = 0
+        return df
+
+    df["has_takeaway"] = df["takeaway"].apply(parse_takeaway)
+    available = df["has_takeaway"].sum()
+    print(f"[flags] Takeaway available: {available} / {len(df)} ({round(available/len(df)*100,1)}%)")
+    return df
+
+
+def run(df: pd.DataFrame) -> pd.DataFrame:
+    df = add_wheelchair_flag(df)
+    df = add_takeaway_flag(df)
     return df

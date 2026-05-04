@@ -1,10 +1,13 @@
 """
-normalize.py
-------------
-Text normalization: unidecode, lowercase, regex cleaning.
-Step 2 in the preprocessing pipeline.
+preprocessing/normalize.py
+--------------------------
+Applies lightweight text normalization to string columns:
+  - unidecode: removes/replaces accented characters (café -> cafe)
+  - lowercase
+  - collapse multiple whitespace to single space
 
-Applied AFTER clean.py (operates on *_clean columns).
+Produces _norm variant columns:
+  name_norm, brand_norm, cuisine_norm, addr_norm
 """
 
 import re
@@ -12,87 +15,44 @@ import pandas as pd
 from unidecode import unidecode
 
 
-def normalize_text(text: str | None) -> str | None:
+def normalize_text(value) -> str | None:
     """
-    General text normalization:
-    - unidecode (handles accented chars, Bosnian/Croatian letters, etc.)
-    - lowercase
-    - hyphen → space
-    - remove punctuation (but keep /)
-    - collapse whitespace
-
-    NOTE: Does NOT touch opening_hours (handled separately).
+    Normalize a single text value.
+    Returns None for missing/empty inputs.
     """
-    if text is None:
+    if pd.isna(value) or str(value).strip() == "":
         return None
-
-    text = str(text)
-    text = unidecode(text)        # đ→d, š→s, ć→c, č→c, ž→z, etc.
-    text = text.lower()
-    text = text.replace("-", " ")
-    text = re.sub(r"[^\w\s/]", "", text)   # remove punct, keep /
-    text = re.sub(r"\s+", " ", text).strip()
-
-    return text if text else None
+    text = str(value).strip()
+    text = unidecode(text)           # café -> cafe, Ü -> U
+    text = text.lower()              # lowercase
+    text = re.sub(r"\s+", " ", text) # collapse whitespace
+    return text.strip()
 
 
-def normalize_name(text: str | None) -> str | None:
+def add_normalized_columns(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Name normalization - same as general but preserves 24/7 pattern.
-    """
-    return normalize_text(text)
-
-
-def normalize_cuisine(text: str | None) -> str | None:
-    """
-    Cuisine: normalize and replace underscores with spaces
-    (OSM uses 'fast_food' style).
-    """
-    normalized = normalize_text(text)
-    if normalized is None:
-        return None
-    return normalized.replace("_", " ")
-
-
-def normalize_addr(text: str | None) -> str | None:
-    """
-    Address normalization - same as general.
-    libpostal/usaddress parsing happens in address.py (after this step).
-    """
-    return normalize_text(text)
-
-
-def normalize_category(text: str | None) -> str | None:
-    """
-    Category: normalize + replace underscores with spaces.
-    """
-    normalized = normalize_text(text)
-    if normalized is None:
-        return None
-    return normalized.replace("_", " ")
-
-
-def apply_normalization(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Applies normalization to all *_clean columns.
-    Returns df with new *_norm columns.
-
-    Input columns expected (from clean.py):
-        name_clean, cuisine_clean, category_clean, addr_clean
-    Output columns added:
-        name_norm, cuisine_norm, category_norm, addr_norm
+    Add _norm variants for: name, brand, cuisine, addr:street.
+    Skips columns that don't exist in the dataframe.
     """
     df = df.copy()
 
-    col_map = {
-        "name_clean": ("name_norm", normalize_name),
-        "cuisine_clean": ("cuisine_norm", normalize_cuisine),
-        "category_clean": ("category_norm", normalize_category),
-        "addr_clean": ("addr_norm", normalize_addr),
+    column_map = {
+        "name":       "name_norm",
+        "brand":      "brand_norm",
+        "addr:street": "addr_norm",
     }
 
-    for src_col, (dst_col, fn) in col_map.items():
-        if src_col in df.columns:
-            df[dst_col] = df[src_col].apply(fn)
+    for source_col, norm_col in column_map.items():
+        if source_col in df.columns:
+            df[norm_col] = df[source_col].apply(normalize_text)
+            filled = df[norm_col].notna().sum()
+            print(f"[normalize] {norm_col}: {filled} / {len(df)} filled")
+        else:
+            print(f"[normalize] Warning - '{source_col}' not found, skipping {norm_col}")
+            df[norm_col] = None
 
     return df
+
+
+def run(df: pd.DataFrame) -> pd.DataFrame:
+    return add_normalized_columns(df)

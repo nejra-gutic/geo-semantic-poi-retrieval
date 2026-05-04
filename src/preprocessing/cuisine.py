@@ -1,125 +1,95 @@
 """
-cuisine.py
-----------
-Normalizes the 'cuisine' OSM field into a clean list of tags.
-
-OSM cuisine values are semicolon-separated (e.g. "pizza;italian;pasta").
-This module:
-  - splits on ; and ,
-  - normalizes each tag (lowercase, underscores → spaces, unidecode)
-  - maps known synonyms to canonical forms
-  - returns both a list (cuisine_tags) and a joined string (cuisine_norm)
+preprocessing/cuisine.py
+------------------------
+Normalizes OSM cuisine tags:
+  - Maps variants/typos to canonical names (CUISINE_MAP)
+  - Handles semicolon-separated multi-cuisine values
+  - Deduplicates and joins into a clean string
 """
 
 import pandas as pd
-from unidecode import unidecode
-import re
 
 
-# Canonical mappings for common cuisine variations
-CUISINE_SYNONYMS = {
-    "burger": "burger",
-    "burgers": "burger",
-    "fast food": "fast_food",
-    "fast-food": "fast_food",
-    "fastfood": "fast_food",
-    "american": "american",
-    "italian": "italian",
-    "pizza": "pizza",
-    "chinese": "chinese",
-    "japanese": "japanese",
-    "sushi": "sushi",
-    "thai": "thai",
-    "indian": "indian",
-    "mexican": "mexican",
-    "mediterranean": "mediterranean",
-    "greek": "greek",
-    "turkish": "turkish",
-    "vietnamese": "vietnamese",
-    "korean": "korean",
-    "french": "french",
-    "spanish": "spanish",
-    "middle eastern": "middle_eastern",
-    "middle_eastern": "middle_eastern",
-    "sandwich": "sandwich",
-    "sandwiches": "sandwich",
-    "coffee": "coffee",
-    "cafe": "cafe",
-    "bakery": "bakery",
-    "vegan": "vegan",
-    "vegetarian": "vegetarian",
-    "seafood": "seafood",
-    "fish": "seafood",
-    "steak": "steak",
-    "barbecue": "barbecue",
-    "bbq": "barbecue",
-    "chicken": "chicken",
-    "noodle": "noodle",
+CUISINE_MAP = {
+    # coffee variants
+    "coffee_shop": "coffee",
+    "coffe_shop": "coffee",
+    "cafe": "coffee",
+    # tex-mex -> mexican
+    "tex-mex": "mexican",
+    "tacos": "mexican",
+    "taco": "mexican",
+    "birrieria": "mexican",
+    "mexican_restaurant": "mexican",
+    # bubble_tea -> tea
+    "bubble_tea": "tea",
+    "teahouse": "tea",
+    # donut -> bakery
+    "donut": "bakery",
+    "pastry": "bakery",
+    "cupcakes": "bakery",
+    "bread": "bakery",
+    "cake": "bakery",
+    "pretzel": "bakery",
+    # steak_house -> steak
+    "steak_house": "steak",
+    # fish_and_chips -> seafood
+    "fish_and_chips": "seafood",
+    # asian_fusion -> asian
+    "asian_fusion": "asian",
+    # noodles -> noodle
     "noodles": "noodle",
-    "ramen": "ramen",
-    "asian": "asian",
-    "fusion": "fusion",
-    "regional": "regional",
-    "international": "international",
+    # brunch -> breakfast
+    "brunch": "breakfast",
+    "diner": "breakfast",
+    "pancake": "breakfast",
+    # bbq
+    "barbecue": "bbq",
+    "korean;barbecue": "bbq",
+    # other
+    "wings": "chicken",
+    "fried_chicken": "chicken",
+    "frozen_yogurt": "ice_cream",
+    "smoothie": "juice",
+    "fine_dining": "regional",
+    "melts": "sandwich",
+    "cheese_steak": "sandwich",
+    "hot_dog": "sandwich",
+    "fries": "american",
+    "organic": "regional",
 }
 
 
-def _normalize_tag(tag: str) -> str:
-    """Normalize a single cuisine tag."""
-    tag = unidecode(tag.strip().lower())
-    tag = tag.replace("-", " ").replace("_", " ")
-    tag = re.sub(r"\s+", " ", tag).strip()
-    return CUISINE_SYNONYMS.get(tag, tag.replace(" ", "_"))  # canonical or underscore form
-
-
-def parse_cuisine(value) -> list[str]:
+def parse_cuisine(value) -> str | None:
     """
-    Parses a raw OSM cuisine string into a list of normalized tags.
-
-    Examples:
-      "pizza;italian"    → ["pizza", "italian"]
-      "fast_food"        → ["fast_food"]
-      "unknown" / NaN    → []
+    Normalize a raw OSM cuisine string.
+    Handles semicolon-separated lists, maps aliases, deduplicates.
+    Returns None for missing values.
     """
-    if pd.isna(value):
-        return []
-
-    text = str(value).strip().lower()
-
-    if text in {"unknown", "", "nan", "none", "yes"}:
-        return []
-
-    # Split on ; or ,
-    raw_tags = re.split(r"[;,]", text)
-    tags = [_normalize_tag(t) for t in raw_tags if t.strip()]
-    tags = [t for t in tags if t]  # remove empty
-
-    return tags
+    if pd.isna(value) or str(value).strip() == "":
+        return None
+    tags = [t.strip().lower() for t in str(value).split(";")]
+    tags = [CUISINE_MAP.get(t, t) for t in tags]
+    tags = list(dict.fromkeys(tags))  # deduplicate while preserving order
+    return " ".join(tags)
 
 
-def apply_cuisine(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Applies cuisine parsing.
-
-    Input:  df with 'cuisine' column
-    Output: df with:
-              cuisine_tags  (list of normalized strings)
-              cuisine_norm  (single joined string, for text matching)
-    """
+def add_cuisine_clean(df: pd.DataFrame) -> pd.DataFrame:
+    """Add cuisine_clean column to dataframe."""
     df = df.copy()
-
     if "cuisine" not in df.columns:
-        print("[cuisine.py] Warning: no 'cuisine' column found.")
+        print("[cuisine] Warning - 'cuisine' column not found, skipping")
+        df["cuisine_clean"] = None
         return df
 
-    df["cuisine_tags"] = df["cuisine"].apply(parse_cuisine)
+    df["cuisine_clean"] = df["cuisine"].apply(parse_cuisine)
 
-    # Joined string for TF-IDF / text matching
-    df["cuisine_norm"] = df["cuisine_tags"].apply(
-        lambda tags: " ".join(tags) if tags else None
-    )
-
-    n_parsed = (df["cuisine_tags"].apply(len) > 0).sum()
-    print(f"[cuisine.py] Parsed cuisine for {n_parsed}/{len(df)} rows.")
-
+    filled = df["cuisine_clean"].notna().sum()
+    unique = df["cuisine_clean"].nunique()
+    print(f"[cuisine] Cuisine filled: {filled} / {len(df)} ({round(filled/len(df)*100,1)}%)")
+    print(f"[cuisine] Unique cuisine values: {unique}")
     return df
+
+
+def run(df: pd.DataFrame) -> pd.DataFrame:
+    return add_cuisine_clean(df)

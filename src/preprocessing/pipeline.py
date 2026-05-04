@@ -1,132 +1,94 @@
 """
-pipeline.py
------------
-Runs the full preprocessing pipeline in order.
+preprocessing/pipeline.py
+--------------------------
+Orchestrates all preprocessing steps in order.
+Each step is a separate module under src/preprocessing/.
 
 Steps:
-  1. clean.py          → *_clean columns
-  2. normalize.py      → *_norm columns
-  3. opening_hours.py  → boolean flags + opening_hours_norm
-  4. flags.py          → wheelchair_accessible, has_takeaway
-  5. cuisine.py        → cuisine_tags, cuisine_norm
-  6. address.py        → addr_street, addr_street_num, addr_city
-  7. geometry.py       → lat, lon
-  8. text_join.py      → poi_text
-
-Final output schema:
-  # Original fields
-  geometry, name, category, category_final, cuisine,
-  opening_hours, wheelchair, takeaway, addr
-
-  # Normalized text
-  name_clean, name_norm
-  category_clean, category_norm
-  cuisine_clean, cuisine_norm, cuisine_tags
-  addr_clean, addr_norm, addr_street, addr_street_num, addr_city
-
-  # Opening hours flags
-  opening_hours_norm, is_24_7, has_opening_hours,
-  by_appointment, has_weekend_hours, weekday_only, works_every_day
-
-  # Boolean flags
-  wheelchair_accessible, has_takeaway
-
-  # Geo
-  lat, lon
-
-  # Text for retrieval
-  poi_text
+  1. clean        - column selection, category creation, name filling, category standardization
+  2. address      - addr:street cleanup
+  3. flags        - wheelchair_accessible, has_takeaway binary flags
+  4. cuisine      - cuisine normalization and mapping
+  5. opening_hours - parse OSM opening_hours into per-day columns + is_24_7
+  6. normalize    - unidecode + lowercase for text columns
+  7. text_join    - build poi_text field for NLP
+  8. geometry     - validate/preserve geometry column
 """
 
 import pandas as pd
-import time
 
-from .clean import apply_cleaning
-from .normalize import apply_normalization
-from .opening_hours import apply_opening_hours
-from .flags import apply_flags
-from .cuisine import apply_cuisine
-from .address import apply_address
-from .geometry import extract_lat_lon
-from .text_join import apply_text_join
+from src.preprocessing import (
+    clean,
+    address,
+    flags,
+    cuisine,
+    opening_hours,
+    normalize,
+    text_join,
+    geometry,
+)
 
 
-def run_pipeline(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
-    """
-    Runs the full preprocessing pipeline on a raw OSM POI DataFrame.
+FINAL_COLS = [
+    "geometry",
+    "name", "name_norm",
+    "brand", "brand_norm",
+    "amenity", "shop", "tourism",
+    "category", "category_final",
+    "cuisine", "cuisine_clean", 
+    "opening_hours", "opening_hours_norm",
+    "is_24_7",
+    "mo_open", "mo_close",
+    "tu_open", "tu_close",
+    "we_open", "we_close",
+    "th_open", "th_close",
+    "fr_open", "fr_close",
+    "sa_open", "sa_close",
+    "su_open", "su_close",
+    "wheelchair", "wheelchair_accessible",
+    "takeaway", "has_takeaway",
+    "addr:street", "addr_norm",
+    "poi_text",
+]
 
-    Args:
-        df      : raw DataFrame (from OSM / cleaned_osm_data_v2.csv)
-        verbose : print step summaries
 
-    Returns:
-        Processed DataFrame with all normalized, flag, and text columns.
-    """
-    start = time.time()
-
-    print("=" * 60)
-    print("PREPROCESSING PIPELINE")
-    print("=" * 60)
+def run(df: pd.DataFrame) -> pd.DataFrame:
+    """Run the full preprocessing pipeline and return the cleaned dataframe."""
+    print("=" * 50)
+    print("Starting OSM POI preprocessing pipeline")
     print(f"Input shape: {df.shape}")
-    print()
+    print("=" * 50)
 
-    steps = [
-        ("1. Cleaning",       apply_cleaning),
-        ("2. Normalization",  apply_normalization),
-        ("3. Opening Hours",  apply_opening_hours),
-        ("4. Flags",          apply_flags),
-        ("5. Cuisine",        apply_cuisine),
-        ("6. Address",        apply_address),
-        ("7. Geometry",       extract_lat_lon),
-        ("8. Text Join",      apply_text_join),
-    ]
+    print("\n--- Step 1: Clean ---")
+    df = clean.run(df)
 
-    for step_name, step_fn in steps:
-        print(f"── {step_name}")
-        df = step_fn(df)
-        print()
+    print("\n--- Step 2: Address ---")
+    df = address.run(df)
 
-    elapsed = time.time() - start
-    print("=" * 60)
-    print(f"Done. Output shape: {df.shape}")
-    print(f"Time: {elapsed:.1f}s")
-    print("=" * 60)
+    print("\n--- Step 3: Flags ---")
+    df = flags.run(df)
 
-    return df
+    print("\n--- Step 4: Cuisine ---")
+    df = cuisine.run(df)
 
+    print("\n--- Step 5: Opening Hours ---")
+    df = opening_hours.run(df)
 
-def get_output_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Returns only the final output columns in clean order.
-    Drops intermediate _clean columns to keep output tidy.
-    """
-    desired_order = [
-        # Geo
-        "geometry", "lat", "lon",
+    print("\n--- Step 6: Normalize ---")
+    df = normalize.run(df)
 
-        # Identity
-        "name", "name_norm",
-        "category", "category_final", "category_norm",
+    print("\n--- Step 7: Text Join ---")
+    df = text_join.run(df)
 
-        # Cuisine
-        "cuisine", "cuisine_norm", "cuisine_tags",
+    print("\n--- Step 8: Geometry ---")
+    df = geometry.run(df)
 
-        # Address
-        "addr", "addr_norm", "addr_street", "addr_street_num", "addr_city",
+    # Keep only final columns that exist
+    existing_final = [col for col in FINAL_COLS if col in df.columns]
+    df_out = df[existing_final].copy()
 
-        # Opening hours
-        "opening_hours", "opening_hours_norm",
-        "is_24_7", "has_opening_hours", "works_every_day",
-        "has_weekend_hours", "weekday_only", "by_appointment",
-
-        # Flags
-        "wheelchair", "wheelchair_accessible",
-        "takeaway", "has_takeaway",
-
-        # Text retrieval
-        "poi_text",
-    ]
-
-    # Only keep columns that actually exist
-    cols = [c for c in desired_order if c in df.columns]
-    return df[cols]
+    print("\n" + "=" * 50)
+    print(f"Pipeline complete. Output shape: {df_out.shape}")
+    print(f"Output columns: {df_out.columns.tolist()}")
+    print("=" * 50)
+    return df_out

@@ -1,80 +1,75 @@
 """
-text_join.py
-------------
-Joins normalized text fields into a single 'poi_text' field.
-This is the field that will be compared against user queries
-via TF-IDF and later embeddings.
+preprocessing/text_join.py
+--------------------------
+Creates a single 'poi_text' field by concatenating normalized columns.
+Used for downstream NLP search and retrieval tasks.
 
-Field priority / weighting logic:
-  1. name_norm        — primary identifier, highest importance
-  2. category_norm    — always present, good discriminator
-  3. cuisine_norm     — high discriminative power for F&B
-  4. addr_street      — useful for "restaurant on X street" queries
-  
-  NOT included in poi_text:
-  - addr_city         — same for all POIs in dataset, adds noise
-  - is_24_7 etc.      — boolean flags, handled by rule-based filter
-  - wheelchair        — same, rule-based
-
-The result is a plain text string, suitable for:
-  - TF-IDF vectorization
-  - Sentence embedding (later stage)
+Fields joined:
+  name_norm + brand_norm + category_final + cuisine_clean + addr_norm
 """
 
 import pandas as pd
 
 
-# Fields to join, in priority order
-# Each tuple: (column_name, repeat_times)
-# Repeat = weight proxy for TF-IDF (name appears 3x → higher weight)
-_JOIN_FIELDS = [
-    ("name_norm", 3),       # most important
-    ("category_norm", 2),
-    ("cuisine_norm", 1),
-    ("addr_street", 1),
+POI_TEXT_COLS = [
+    "name_norm",
+    "brand_norm",
+    "category_final",
+    "cuisine_clean",
+    "addr_norm",
 ]
 
 
-def build_poi_text(row: pd.Series) -> str | None:
+def build_poi_text(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Builds the joined text string for a single POI row.
-    Repeats fields according to their weight.
-    Returns None if all fields are empty.
-    """
-    parts = []
-
-    for col, repeat in _JOIN_FIELDS:
-        value = row.get(col)
-        if value is not None and str(value).strip() not in {"", "nan", "none"}:
-            text = str(value).strip()
-            parts.extend([text] * repeat)
-
-    if not parts:
-        return None
-
-    return " ".join(parts)
-
-
-def apply_text_join(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Applies text joining to create 'poi_text' column.
-
-    Expects normalized columns from normalize.py and address.py:
-      name_norm, category_norm, cuisine_norm, addr_street
-
-    Output:
-      poi_text   : joined weighted text string (for TF-IDF/embeddings)
+    Concatenate normalized text columns into a single 'poi_text' field.
+    Missing values are treated as empty strings.
+    Multiple spaces are collapsed.
     """
     df = df.copy()
 
-    df["poi_text"] = df.apply(build_poi_text, axis=1)
+    available = [col for col in POI_TEXT_COLS if col in df.columns]
+    missing = [col for col in POI_TEXT_COLS if col not in df.columns]
+    if missing:
+        print(f"[text_join] Warning - missing columns (will be skipped): {missing}")
 
-    n_filled = df["poi_text"].notna().sum()
-    print(f"[text_join.py] poi_text created for {n_filled}/{len(df)} rows.")
+    if not available:
+        print("[text_join] Warning - no text columns available, poi_text set to empty")
+        df["poi_text"] = ""
+        return df
 
-    # Quick sample
-    sample = df["poi_text"].dropna().sample(min(3, n_filled), random_state=42).tolist()
-    for s in sample:
-        print(f"  Example: {s[:120]}")
 
+    df["poi_text"] = (
+        df[available]
+        .fillna("")
+        .apply(lambda row: " ".join(row.values.astype(str)), axis=1)
+        .str.replace(r"\s+", " ", regex=True)
+        .str.strip()
+    )
+
+    empty_count = (df["poi_text"] == "").sum()
+    print(f"[text_join] poi_text created for {len(df) - empty_count} / {len(df)} rows")
+    print(f"[text_join] Sample:\n{df['poi_text'].dropna().head(3).to_string()}")
+    return df
+
+
+def print_coverage(df: pd.DataFrame) -> None:
+    """Print fill rate for key columns."""
+
+    if len(df) == 0:
+        print("[text_join] Empty dataframe")
+        return
+    
+    cols = ["name", "brand", "category_final", "cuisine_clean", "addr:street"]
+    print("\n[text_join] Coverage report:")
+    for col in cols:
+        if col in df.columns:
+            filled = df[col].notna().sum()
+            pct = round(filled / len(df) * 100, 1)
+            print(f"  {col}: {filled} / {len(df)} ({pct}%)")
+
+
+def run(df: pd.DataFrame) -> pd.DataFrame:
+    print_coverage(df)
+    df = build_poi_text(df)
     return df

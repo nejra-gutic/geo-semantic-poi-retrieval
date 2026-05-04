@@ -1,157 +1,135 @@
 """
-opening_hours.py
-----------------
-Parses the 'opening_hours' OSM field into structured boolean flags.
+preprocessing/opening_hours.py
+-------------------------------
+Parses OSM opening_hours strings into structured per-day open/close times.
 
-Flags produced (all already exist in your dataset, this module standardizes them):
-  - is_24_7           : True if open 24/7
-  - works_every_day   : True if Mo-Su or 24/7
-  - has_opening_hours : True if any valid hours string exists
-  - by_appointment    : True if appointment-only
-  - has_weekend_hours : True if Sa or Su mentioned
-  - weekday_only      : True if Mo-Fr only, no weekend
+Output columns per day (mo, tu, we, th, fr, sa, su):
+  - {day}_open:  e.g. "09:00"
+  - {day}_close: e.g. "21:00" or "24:00" for midnight
 
-Also produces:
-  - opening_hours_norm: cleaned string representation (original preserved as-is)
+Additional:
+  - is_24_7: bool - True if open ~10080 min/week (24h x 7 days)
+
+Requires: pip install opening-hours-py
 """
 
-import re
 import pandas as pd
+from datetime import datetime, timedelta
+
+try:
+    from opening_hours import OpeningHours
+    OPENING_HOURS_AVAILABLE = True
+except ImportError:
+    OPENING_HOURS_AVAILABLE = False
+    print("[opening_hours] Warning - 'opening-hours-py' not installed.")
+    print("                Run: pip install opening-hours-py")
 
 
-# ── helpers ──────────────────────────────────────────────────────────────────
-
-_EMPTY_VALUES = {"unknown", "", "nan", "none"}
-
-_DAY_RANGES = {
-    "Mo-Fr": ["Mo", "Tu", "We", "Th", "Fr"],
-    "Mo-Sa": ["Mo", "Tu", "We", "Th", "Fr", "Sa"],
-    "Mo-Su": ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"],
-    "Tu-Sa": ["Tu", "We", "Th", "Fr", "Sa"],
-    "Sa-Su": ["Sa", "Su"],
-    "Fr,Sa": ["Fr", "Sa"],
-    "We-Su": ["We", "Th", "Fr", "Sa", "Su"],
-}
-
-_ALL_DAYS = {"Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"}
+# Reference Monday used for interval extraction (the exact date doesn't matter)
+_MONDAY = datetime(2025, 5, 5, 0, 0)
+DAYS = ["mo", "tu", "we", "th", "fr", "sa", "su"]
 
 
-def _is_valid(value) -> bool:
-    if pd.isna(value):
-        return False
-    text = str(value).strip().lower()
-    return text not in _EMPTY_VALUES and text != ""
-
-
-def flag_is_24_7(value) -> bool:
-    if not _is_valid(value):
-        return False
-    return str(value).strip().lower() in {"24/7", "24/7;", "mo-su 00:00-24:00"}
-
-
-def flag_has_opening_hours(value) -> bool:
-    return _is_valid(value)
-
-
-def flag_by_appointment(value) -> bool:
-    if not _is_valid(value):
-        return False
-    return "appointment" in str(value).lower()
-
-
-def flag_has_weekend_hours(value) -> bool:
-    if not _is_valid(value):
-        return False
-    text = str(value)
-    return bool(re.search(r"\bSa\b|\bSu\b", text))
-
-
-def flag_weekday_only(value) -> bool:
-    if not _is_valid(value):
-        return False
-    text = str(value)
-    has_weekdays = "Mo-Fr" in text
-    has_weekend = bool(re.search(r"\bSa\b|\bSu\b", text))
-    return has_weekdays and not has_weekend
-
-
-def flag_works_every_day(value) -> bool:
-    """True if all 7 days are covered."""
-    if not _is_valid(value):
-        return False
-
-    text = str(value)
-
-    if flag_is_24_7(value):
-        return True
-
-    days = set()
-
-    for pattern, covered in _DAY_RANGES.items():
-        if pattern in text:
-            days.update(covered)
-
-    for day in _ALL_DAYS:
-        if re.search(rf"\b{day}\b", text):
-            days.add(day)
-
-    return days >= _ALL_DAYS
-
-
-def normalize_opening_hours(value) -> str | None:
+def parse_opening_hours(value) -> tuple[dict, bool]:
     """
-    Lightly normalizes the hours string:
-    - strips whitespace
-    - returns None for empty/unknown values
-    - preserves original format otherwise (OSM hours are structured)
+    Parse a single OSM opening_hours string.
+
+    Returns:
+        (dict of {day_open/day_close: "HH:MM" or None}, is_24_7: bool)
     """
-    if not _is_valid(value):
-        return None
-    return str(value).strip()
+    empty = {f"{d}_{t}": None for d in DAYS for t in ["open", "close"]}
+
+    if not value or str(value).strip().lower() in ("nan", "none", ""):
+        return empty, False
+
+    if not OPENING_HOURS_AVAILABLE:
+        return empty, False
+
+    text = str(value).strip()
+    text = text.split("||")[0].strip()  # take only first rule if multiple
+
+    result = {f"{d}_{t}": None for d in DAYS for t in ["open", "close"]}
+    is_24_7 = False
+
+    try:
+        oh = OpeningHours(text)
+        week_end = _MONDAY + timedelta(days=7)
+
+        # Extract all OPEN intervals for the full week
+        all_open = [
+            iv
+            for iv in oh.intervals(start=_MONDAY, end=week_end)
+            if str(iv[2]) == "open"
+        ]
+
+        # is_24_7: open for ~10080 minutes in a week
+        total_open_min = sum(
+            (iv[1] - iv[0]).total_seconds() / 60 for iv in all_open
+        )
+        is_24_7 = total_open_min >= 7 * 24 * 60 - 1
+
+        # Extract open/close per day
+        for day_idx, day_key in enumerate(DAYS):
+            day_start = _MONDAY + timedelta(days=day_idx)
+            day_end = day_start + timedelta(days=1)
+
+            day_intervals = []
+            for iv in all_open:
+                iv_start = max(iv[0], day_start)
+                iv_end = min(iv[1], day_end)
+                if iv_start < iv_end:
+                    day_intervals.append((iv_start, iv_end))
+
+            if day_intervals:
+                result[f"{day_key}_open"] = day_intervals[0][0].strftime("%H:%M")
+                last_close = day_intervals[-1][1]
+                # If close falls into next day -> 24:00
+                result[f"{day_key}_close"] = (
+                    "24:00" if last_close >= day_end else last_close.strftime("%H:%M")
+                )
+
+    except Exception:
+        pass  # Invalid OSM format -> leave all None
+
+    return result, is_24_7
 
 
-# ── main apply function ───────────────────────────────────────────────────────
-
-def apply_opening_hours(df: pd.DataFrame) -> pd.DataFrame:
+def add_opening_hours(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Applies all opening_hours processing.
-
-    Input:  df with 'opening_hours' column
-    Output: df with columns:
-              opening_hours_norm  (cleaned string or None)
-              is_24_7             (bool)
-              has_opening_hours   (bool)
-              by_appointment      (bool)
-              has_weekend_hours   (bool)
-              weekday_only        (bool)
-              works_every_day     (bool)
-
-    Note: If these boolean columns already exist (from your notebook),
-          they will be overwritten with the standardized versions.
+    Parse opening_hours column and expand into per-day open/close columns.
+    Also adds is_24_7 boolean column.
     """
     df = df.copy()
 
     if "opening_hours" not in df.columns:
-        print("[opening_hours.py] Warning: no 'opening_hours' column found.")
+        print("[opening_hours] Warning - 'opening_hours' column not found, skipping")
+        for d in DAYS:
+            df[f"{d}_open"] = None
+            df[f"{d}_close"] = None
+        df["is_24_7"] = False
         return df
 
-    oh = df["opening_hours"]
+    print(f"[opening_hours] Parsing {df['opening_hours'].notna().sum()} non-null values...")
 
-    df["opening_hours_norm"] = oh.apply(normalize_opening_hours)
-    df["is_24_7"] = oh.apply(flag_is_24_7)
-    df["has_opening_hours"] = oh.apply(flag_has_opening_hours)
-    df["by_appointment"] = oh.apply(flag_by_appointment)
-    df["has_weekend_hours"] = oh.apply(flag_has_weekend_hours)
-    df["weekday_only"] = oh.apply(flag_weekday_only)
-    df["works_every_day"] = oh.apply(flag_works_every_day)
+    parsed = df["opening_hours"].apply(parse_opening_hours)
 
-    # Summary
-    print(f"[opening_hours.py] Processed {len(df)} rows.")
-    print(f"  has_opening_hours : {df['has_opening_hours'].sum()}")
-    print(f"  is_24_7           : {df['is_24_7'].sum()}")
-    print(f"  works_every_day   : {df['works_every_day'].sum()}")
-    print(f"  has_weekend_hours : {df['has_weekend_hours'].sum()}")
-    print(f"  weekday_only      : {df['weekday_only'].sum()}")
-    print(f"  by_appointment    : {df['by_appointment'].sum()}")
+    hours_df = pd.DataFrame(
+        [row for row, _ in parsed],
+        index=df.index,
+    )
+    df = pd.concat([df, hours_df], axis=1)
+    df["is_24_7"] = [is247 for _, is247 in parsed]
 
+    df["opening_hours_norm"] = df["opening_hours"].apply(
+        lambda x: str(x).strip() if pd.notna(x) else None
+    )
+
+    open_24_7_count = df["is_24_7"].sum()
+    has_hours = hours_df.notna().any(axis=1).sum()
+    print(f"[opening_hours] Rows with parsed hours: {has_hours}")
+    print(f"[opening_hours] 24/7 places:            {open_24_7_count}")
     return df
+
+
+def run(df: pd.DataFrame) -> pd.DataFrame:
+    return add_opening_hours(df)
