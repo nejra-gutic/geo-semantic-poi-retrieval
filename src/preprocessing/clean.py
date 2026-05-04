@@ -80,7 +80,10 @@ def select_columns(df: pd.DataFrame) -> pd.DataFrame:
     if missing:
         print(f"[clean] Warning - columns not found in data: {missing}")
     print(f"[clean] Selected {len(existing)} columns: {existing}")
-    return df[existing].copy()
+    result = df[existing].copy()
+    if "geometry" in df.columns:
+        result["geometry"] = df["geometry"]
+    return result
 
 
 def create_category(df: pd.DataFrame) -> pd.DataFrame:

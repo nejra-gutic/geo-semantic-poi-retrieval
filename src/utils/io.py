@@ -10,6 +10,24 @@ import geopandas as gpd
 from pathlib import Path
 
 
+def load_data(path: str) -> pd.DataFrame:
+    """Load CSV or GeoJSON based on file extension."""
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"File not found: {path}")
+
+    if path.suffix == ".geojson":
+        print(f"[io] Loading GeoJSON: {path}")
+        df = gpd.read_file(path)
+        print(f"[io] Loaded {len(df)} rows")
+    else:
+        print(f"[io] Loading CSV: {path}")
+        df = pd.read_csv(path, index_col=0, low_memory=False)
+        print(f"[io] Loaded {len(df)} rows, {len(df.columns)} columns")
+
+    return df
+
+
 def load_csv(path: str) -> pd.DataFrame:
     """Load a CSV file into a DataFrame."""
     path = Path(path)

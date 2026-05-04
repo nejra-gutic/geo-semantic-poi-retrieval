@@ -48,6 +48,7 @@ FINAL_COLS = [
     "wheelchair", "wheelchair_accessible",
     "takeaway", "has_takeaway",
     "addr:street", "addr_norm",
+    "latitude", "longitude",
     "poi_text",
 ]
 
