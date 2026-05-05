@@ -1,71 +1,77 @@
 query,intent
-"coffee near burnside",find_cafe
+"coffee near me",find_cafe
 "coffee shop downtown",find_cafe
 "cafe near division street",find_cafe
-"best espresso portland",find_cafe
-"cappuccino near me",find_cafe
-"latte downtown portland",find_cafe
-"tea house near me",find_cafe
-"coffee and pastry shop",find_cafe
-"breakfast cafe portland",find_cafe
-"cozy cafe near burnside",find_cafe
+"best espresso in town",find_cafe
+"cappuccino nearby",find_cafe
+"latte place downtown",find_cafe
+"tea house close by",find_cafe
+"coffee and pastry spot",find_cafe
+"breakfast cafe near me",find_cafe
+"cozy cafe downtown",find_cafe
+
 "mexican restaurant",find_food
 "pizza place near me",find_food
-"italian food takeaway",find_food
-"sushi restaurant",find_food
-"burger joint downtown",find_food
-"thai food near division",find_food
-"chinese restaurant portland",find_food
-"indian food near me",find_food
-"vegan restaurant downtown",find_food
-"bbq restaurant portland",find_food
-"pharmacy open now",find_service
+"italian takeaway food",find_food
+"sushi restaurant nearby",find_food
+"burger place downtown",find_food
+"thai restaurant close by",find_food
+"chinese food near me",find_food
+"indian restaurant downtown",find_food
+"vegan food nearby",find_food
+"bbq restaurant close by",find_food
+
+"pharmacy near me",find_service
 "nearest hospital",find_service
-"atm near me",find_service
-"bank downtown portland",find_service
+"atm close by",find_service
+"bank downtown",find_service
 "dentist near me",find_service
-"doctor near burnside",find_service
-"urgent care portland",find_service
-"post office near me",find_service
-"veterinarian near me",find_service
-"laundromat near division",find_service
+"doctor nearby",find_service
+"urgent care clinic",find_service
+"post office close by",find_service
+"veterinarian nearby",find_service
+"laundromat near me",find_service
+
 "grocery store near me",find_shop
 "clothing store downtown",find_shop
-"bookstore near burnside",find_shop
-"hardware store portland",find_shop
-"pharmacy store near me",find_shop
-"shoe store downtown",find_shop
-"electronics store portland",find_shop
-"furniture store near me",find_shop
-"pet store near division",find_shop
+"bookstore nearby",find_shop
+"hardware store close by",find_shop
+"shoe store near me",find_shop
+"electronics store downtown",find_shop
+"furniture shop nearby",find_shop
+"pet store close by",find_shop
 "supermarket near me",find_shop
+"gift shop downtown",find_shop
+
 "wheelchair accessible cafe",accessibility
-"wheelchair accessible restaurant",accessibility
-"accessible pharmacy near me",accessibility
+"accessible restaurant near me",accessibility
+"wheelchair friendly pharmacy",accessibility
 "disability friendly cafe",accessibility
-"wheelchair friendly bar",accessibility
-"accessible entrance restaurant",accessibility
-"disabled access cafe portland",accessibility
-"wheelchair accessible shop",accessibility
-"accessible dentist near me",accessibility
-"disability access pharmacy",accessibility
-"24/7 pharmacy",hours_based
-"open late restaurant",hours_based
-"restaurant open now",hours_based
+"accessible bar nearby",accessibility
+"restaurant with accessible entrance",accessibility
+"disabled access cafe",accessibility
+"accessible shop near me",accessibility
+"wheelchair friendly dentist",accessibility
+"pharmacy with disabled access",accessibility
+
+"pharmacy open now",hours_based
+"restaurant open late",hours_based
+"which cafes are open now",hours_based
 "cafe open early morning",hours_based
 "bar open late night",hours_based
 "24 hour grocery store",hours_based
-"open sunday restaurant",hours_based
-"late night food portland",hours_based
-"early breakfast cafe",hours_based
-"always open pharmacy",hours_based
+"restaurant open on sunday",hours_based
+"late night food near me",hours_based
+"early breakfast cafe open",hours_based
+"store open 24/7",hours_based
+
 "parking near downtown",find_transport
 "bus stop near me",find_transport
-"bicycle parking portland",find_transport
-"car park near burnside",find_transport
+"bicycle parking nearby",find_transport
+"car park close by",find_transport
 "parking garage downtown",find_transport
-"bike rack near division",find_transport
-"taxi near me",find_transport
-"parking lot near me",find_transport
-"motorcycle parking portland",find_transport
-"disabled parking near me",find_transport
+"bike rack near me",find_transport
+"taxi nearby",find_transport
+"parking lot close by",find_transport
+"motorcycle parking near me",find_transport
+"public transport stop nearby",find_transport

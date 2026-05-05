@@ -221,3 +221,6 @@ __marimo__/
 # Data files (too large for git)
 data/raw/*
 data/processed/*
+
+models/*.pkl
+models/*.png
