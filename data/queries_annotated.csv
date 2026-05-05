@@ -1,0 +1,22 @@
+query,intent
+"coffee near burnside",find_cafe
+"coffee shop downtown",find_cafe
+"cafe near division street",find_cafe
+"best espresso portland",find_cafe
+"mexican restaurant",find_food
+"pizza place near me",find_food
+"italian food takeaway",find_food
+"sushi restaurant",find_food
+"burger joint",find_food
+"pharmacy open now",find_service
+"nearest hospital",find_service
+"atm near me",find_service
+"grocery store",find_shop
+"clothing store downtown",find_shop
+"bookstore near burnside",find_shop
+"wheelchair accessible cafe",accessibility
+"wheelchair accessible restaurant",accessibility
+"24/7 pharmacy",hours_based
+"open late restaurant",hours_based
+"parking near downtown",find_transport
+"bus stop near me",find_transport
