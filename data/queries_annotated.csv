@@ -3,20 +3,69 @@ query,intent
 "coffee shop downtown",find_cafe
 "cafe near division street",find_cafe
 "best espresso portland",find_cafe
+"cappuccino near me",find_cafe
+"latte downtown portland",find_cafe
+"tea house near me",find_cafe
+"coffee and pastry shop",find_cafe
+"breakfast cafe portland",find_cafe
+"cozy cafe near burnside",find_cafe
 "mexican restaurant",find_food
 "pizza place near me",find_food
 "italian food takeaway",find_food
 "sushi restaurant",find_food
-"burger joint",find_food
+"burger joint downtown",find_food
+"thai food near division",find_food
+"chinese restaurant portland",find_food
+"indian food near me",find_food
+"vegan restaurant downtown",find_food
+"bbq restaurant portland",find_food
 "pharmacy open now",find_service
 "nearest hospital",find_service
 "atm near me",find_service
-"grocery store",find_shop
+"bank downtown portland",find_service
+"dentist near me",find_service
+"doctor near burnside",find_service
+"urgent care portland",find_service
+"post office near me",find_service
+"veterinarian near me",find_service
+"laundromat near division",find_service
+"grocery store near me",find_shop
 "clothing store downtown",find_shop
 "bookstore near burnside",find_shop
+"hardware store portland",find_shop
+"pharmacy store near me",find_shop
+"shoe store downtown",find_shop
+"electronics store portland",find_shop
+"furniture store near me",find_shop
+"pet store near division",find_shop
+"supermarket near me",find_shop
 "wheelchair accessible cafe",accessibility
 "wheelchair accessible restaurant",accessibility
+"accessible pharmacy near me",accessibility
+"disability friendly cafe",accessibility
+"wheelchair friendly bar",accessibility
+"accessible entrance restaurant",accessibility
+"disabled access cafe portland",accessibility
+"wheelchair accessible shop",accessibility
+"accessible dentist near me",accessibility
+"disability access pharmacy",accessibility
 "24/7 pharmacy",hours_based
 "open late restaurant",hours_based
+"restaurant open now",hours_based
+"cafe open early morning",hours_based
+"bar open late night",hours_based
+"24 hour grocery store",hours_based
+"open sunday restaurant",hours_based
+"late night food portland",hours_based
+"early breakfast cafe",hours_based
+"always open pharmacy",hours_based
 "parking near downtown",find_transport
 "bus stop near me",find_transport
+"bicycle parking portland",find_transport
+"car park near burnside",find_transport
+"parking garage downtown",find_transport
+"bike rack near division",find_transport
+"taxi near me",find_transport
+"parking lot near me",find_transport
+"motorcycle parking portland",find_transport
+"disabled parking near me",find_transport
