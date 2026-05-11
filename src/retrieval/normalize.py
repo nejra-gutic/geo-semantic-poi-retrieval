@@ -38,7 +38,7 @@ def normalize(text: str) -> str | None:
         return None
 
     text = str(text).lower()
-    text = re.sub(r"[^a-z0-9\s]", " ", text)    # remove punctuation
+    text = re.sub(r"[^a-z0-9\s/]", " ", text)    # remove punctuation
     text = re.sub(r"\s+", " ", text).strip()      # collapse whitespace
 
     doc = nlp(text)

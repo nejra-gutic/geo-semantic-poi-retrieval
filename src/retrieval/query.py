@@ -16,6 +16,7 @@ import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from src.retrieval.normalize import normalize
 from src.retrieval.intent_classifier import predict
+from src.preprocessing.normalize import normalize_text as preprocess_text
 
 
 INTENT_TO_CATEGORY = {
@@ -25,7 +26,7 @@ INTENT_TO_CATEGORY = {
     "find_shop":      ["convenience", "clothes", "hairdresser"],
     "find_transport": ["transport"],
     "hours_based":    None,
-    "accessibility":  None,
+    "accessibility":  ["cafe", "restaurant", "shop", "pharmacy", "bar"],  
 }
 
 RESULT_COLS = [
@@ -86,7 +87,7 @@ def search(
         DataFrame of top_k matching POIs with similarity scores
     """
     # Normalize query
-    query_norm = normalize(query)
+    query_norm = normalize(preprocess_text(query) or query)
     if not query_norm:
         print("[query] Empty query after normalization")
         return pd.DataFrame()
@@ -101,6 +102,23 @@ def search(
         print(f"[query] Intent: {intent} ({confidence}%)")
 
         categories = INTENT_TO_CATEGORY.get(intent)
+
+        # hours_based — pokušaj izvući kategoriju iz query-ja direktno
+        if intent == "hours_based":
+            keyword_to_category = {
+                "pharmacy": ["pharmacy"],
+                "cafe": ["cafe"],
+                "coffee": ["cafe"],
+                "restaurant": ["restaurant", "fast_food"],
+                "bar": ["bar"],
+                "shop": ["convenience", "clothes"],
+                "grocery": ["convenience"],
+            }
+            for keyword, cats in keyword_to_category.items():
+                if keyword in query.lower():
+                    categories = cats
+                    break
+                
         if categories:
             df_filtered = df_filtered[df_filtered["category_final"].isin(categories)]
             print(f"[query] Filtered to categories: {categories} ({len(df_filtered)} POIs)")

@@ -6,9 +6,9 @@ Applies tokenization, normalization and linguistic processing
 to the cleaned POI dataset.
 
 Steps:
-  1. tokenize    - spaCy tokenization of poi_text
-  2. normalize   - lowercase, stopword removal, lemmatization
-  3. linguistic  - POS tagging, NER, lemmas
+   1. normalize - lowercase, stopwords, lemmatization
+   2. tokenize  - spaCy tokenization
+   3. linguistic - POS tagging, NER
 """
 
 import pandas as pd
@@ -26,11 +26,11 @@ def run(df: pd.DataFrame) -> pd.DataFrame:
     print(f"Input shape: {df.shape}")
     print("=" * 50)
 
-    print("\n--- Step 1: Tokenize ---")
-    df = tokenize.run(df)
-
-    print("\n--- Step 2: Normalize ---")
+    print("\n--- Step 1: Normalize ---")
     df = normalize.run(df)
+
+    print("\n--- Step 2: Tokenize ---")
+    df = tokenize.run(df)
 
     print("\n--- Step 3: Linguistic ---")
     df = linguistic.run(df)

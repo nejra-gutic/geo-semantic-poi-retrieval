@@ -13,9 +13,12 @@ import pandas as pd
 
 POI_TEXT_COLS = [
     "name_norm",
+    "name_norm",
+    "name_norm",      # 3x
     "brand_norm",
     "category_final",
     "cuisine_clean",
+    "cuisine_clean",  # 2x
     "addr_norm",
 ]
 

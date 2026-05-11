@@ -111,6 +111,47 @@ def load_vectorizer(path: str = "models/tfidf_vectorizer.pkl") -> TfidfVectorize
     print(f"[tfidf] Vectorizer loaded: {path}")
     return vectorizer
 
+def compare_ngrams(
+    df: pd.DataFrame,
+    col: str = "poi_text_lemma",
+    test_queries: list = None,
+) -> None:
+    """
+    Compare TF-IDF performance across different n-gram ranges.
+    Prints top 5 results per query for each n-gram setting.
+    """
+    if test_queries is None:
+        test_queries = [
+            "coffee near burnside",
+            "mexican restaurant",
+            "wheelchair accessible cafe",
+        ]
+
+    ngram_settings = [(1, 1), (1, 2), (1, 3)]
+    corpus = df[col].fillna("").tolist()
+
+    for ngram in ngram_settings:
+        print(f"\n{'='*50}")
+        print(f"N-gram range: {ngram}")
+        print(f"{'='*50}")
+
+        vec = TfidfVectorizer(
+            max_features=5000,
+            min_df=2,
+            ngram_range=ngram,
+            token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z]+\b",
+        )
+        matrix = vec.fit_transform(corpus)
+
+        for query in test_queries:
+            query_vec = vec.transform([query])
+            scores = cosine_similarity(query_vec, matrix).flatten()
+            top_indices = np.argsort(scores)[::-1][:3]
+
+            print(f"\nQuery: '{query}'")
+            for i in top_indices:
+                print(f"  {df.iloc[i]['name']} | {df.iloc[i]['category_final']} | score: {round(scores[i], 3)}")
+
 
 def run(df: pd.DataFrame) -> tuple:
     return build_tfidf(df)
