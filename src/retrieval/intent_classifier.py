@@ -199,7 +199,9 @@ def predict(query: str, model, vectorizer) -> tuple[str, float]:
     Predict intent for a single query.
     Returns (intent, confidence).
     """
-    X = vectorizer.transform([query])
+    query_norm = normalize_query(query)
+    X = vectorizer.transform([query_norm])
+
     intent = model.predict(X)[0]
     probs = model.predict_proba(X)[0]
     confidence = round(max(probs) * 100, 1)

@@ -13,6 +13,7 @@ import pandas as pd
 from rank_bm25 import BM25Okapi
 
 
+
 def build_bm25(df: pd.DataFrame, col: str = "poi_text_lemma") -> BM25Okapi:
     """Build BM25 index from a text column."""
     if col not in df.columns:

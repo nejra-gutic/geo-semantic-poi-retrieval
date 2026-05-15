@@ -22,7 +22,7 @@ from src.preprocessing.normalize import normalize_text as preprocess_text
 INTENT_TO_CATEGORY = {
     "find_cafe":      ["cafe"],
     "find_food":      ["restaurant", "fast_food"],
-    "find_service":   ["pharmacy", "doctors", "bank", "hospital"],
+    "find_service":   ["pharmacy", "doctors", "bank", "hospital", "atm"],
     "find_shop":      ["convenience", "clothes", "hairdresser"],
     "find_transport": ["transport"],
     "hours_based":    None,

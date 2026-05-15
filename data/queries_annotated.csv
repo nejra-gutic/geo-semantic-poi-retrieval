@@ -75,3 +75,26 @@ query,intent
 "parking lot close by",find_transport
 "motorcycle parking near me",find_transport
 "public transport stop nearby",find_transport
+
+"bank near me",find_service
+"nearest bank",find_service
+"bank close by",find_service
+"atm near me",find_service
+"nearest atm",find_service
+"cash machine near me",find_service
+"hospital near me",find_service
+"clinic near me",find_service
+
+"pizza near me",find_food
+"pizza restaurant near me",find_food
+"pizza place downtown",find_food
+"burger near me",find_food
+"restaurant near me",find_food
+"food place near me",find_food
+
+"bus stop nearby",find_transport
+"nearest bus stop",find_transport
+"bus station near me",find_transport
+"public transport near me",find_transport
+"train station nearby",find_transport
+"tram stop near me",find_transport
