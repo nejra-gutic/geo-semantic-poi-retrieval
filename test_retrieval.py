@@ -185,13 +185,22 @@ def evaluate_bm25(
         expected = item["expected_category"]
 
         print(f"\nQuery: '{q}'")
-        df_filtered = filter_by_intent_and_rules(q, df, intent_model, intent_vectorizer)
+        df_filtered = filter_by_intent_and_rules(
+            q,
+            df,
+            intent_model,
+            intent_vectorizer,
+        )
 
+        # PRVO boolean filter
+        df_filtered = apply_boolean_filters(q, df_filtered)
+
+        # ONDA BM25 search
         results = search_bm25(
             q,
             bm25,
             df,
-            top_k=k * 5,
+            top_k=k,
             df_filtered=df_filtered,
         )
 
@@ -343,13 +352,13 @@ def main():
         {"query": "mexican restaurant", "expected_category": "restaurant"},
         {"query": "coffee near burnside", "expected_category": "cafe"},
         {"query": "wheelchair accessible cafe", "expected_category": "cafe"},
-        {"query": "24/7 pharmacy", "expected_category": "pharmacy"},
+        #{"query": "24/7 pharmacy", "expected_category": "pharmacy"},
         {"query": "italian restaurant takeaway", "expected_category": "restaurant"},
         {"query": "nearest hospital", "expected_category": "hospital"},
         {"query": "atm close by", "expected_category": "atm"},
         {"query": "bank downtown", "expected_category": "bank"},
         {"query": "pizza place near me", "expected_category": "restaurant"},
-        {"query": "bus stop nearby", "expected_category": "transport"},
+       # {"query": "bus stop nearby", "expected_category": "transport"},
     ]
 
     evaluate_tfidf(

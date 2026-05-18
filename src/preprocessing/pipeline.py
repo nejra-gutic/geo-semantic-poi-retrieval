@@ -34,7 +34,7 @@ FINAL_COLS = [
     "name", "name_norm",
     "brand", "brand_norm",
     "amenity", "shop", "tourism",
-    "category", "category_final",
+    "category", "category_final", "category_group",
     "cuisine", "cuisine_clean", 
     "opening_hours", "opening_hours_norm",
     "is_24_7",

@@ -3,9 +3,15 @@ preprocessing/clean.py
 ----------------------
 Handles:
   - Column selection from raw OSM data
-  - Category column creation (amenity > shop > tourism priority)
+  - Raw category creation (amenity > shop > tourism priority)
   - Missing name resolution (name -> brand -> 'unknown')
-  - Category standardization (grouping, rare -> other, typo fixes)
+  - Category cleanup without losing specific POI type
+  - High-level category grouping for filtering/reporting
+
+Category columns:
+  - category:       raw OSM category selected from amenity/shop/tourism
+  - category_final: cleaned specific category, e.g. fuel, parking, cafe, pharmacy
+  - category_group: broad group, e.g. transport, utility, food_drink, service, shop
 """
 
 import pandas as pd
@@ -64,13 +70,64 @@ COMMUNITY_CATEGORIES = {
     "social_centre",
 }
 
+FOOD_DRINK_CATEGORIES = {
+    "restaurant",
+    "fast_food",
+    "cafe",
+    "bar",
+    "pub",
+    "bakery",
+    "ice_cream",
+    "food_court",
+}
+
+SERVICE_CATEGORIES = {
+    "pharmacy",
+    "hospital",
+    "clinic",
+    "doctors",
+    "dentist",
+    "bank",
+    "atm",
+    "veterinary",
+    "post_office",
+    "police",
+    "fire_station",
+    "library",
+}
+
+SHOP_CATEGORIES = {
+    "convenience",
+    "supermarket",
+    "clothes",
+    "furniture",
+    "gift",
+    "books",
+    "mobile_phone",
+    "beauty",
+    "hairdresser",
+    "bicycle",
+    "electronics",
+    "shoes",
+}
+
 TYPO_FIXES = {
     "student_accomodation": "student_accommodation",
 }
 
-NOISE_CATEGORIES = ["yes", "vacant", "trade", "bed", "art", "car"]
+NOISE_CATEGORIES = {"yes", "vacant", "trade", "bed", "art", "car"}
 
 RARE_THRESHOLD = 10
+
+
+CATEGORY_GROUPS = {
+    "transport": TRANSPORT_CATEGORIES,
+    "utility": UTILITY_CATEGORIES,
+    "community": COMMUNITY_CATEGORIES,
+    "food_drink": FOOD_DRINK_CATEGORIES,
+    "service": SERVICE_CATEGORIES,
+    "shop": SHOP_CATEGORIES,
+}
 
 
 def select_columns(df: pd.DataFrame) -> pd.DataFrame:
@@ -88,7 +145,7 @@ def select_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 def create_category(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Merge amenity, shop, tourism into a single 'category' column.
+    Merge amenity, shop, tourism into a single raw 'category' column.
     Priority: amenity > shop > tourism.
     """
     df = df.copy()
@@ -121,41 +178,66 @@ def fill_missing_names(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def clean_specific_category(cat):
+    """
+    Clean a raw OSM category while keeping the specific POI type.
+
+    Important: transport-like categories are no longer collapsed into
+    'transport'. For example, 'fuel' stays 'fuel' and 'parking' stays 'parking'.
+    """
+    if pd.isna(cat):
+        return None
+
+    cat = str(cat).strip().lower()
+    cat = TYPO_FIXES.get(cat, cat)
+
+    if cat in NOISE_CATEGORIES:
+        return "other"
+
+    return cat
+
+
+def assign_category_group(category_final, category_counts):
+    """
+    Assign a broad group from a cleaned specific category.
+    Rare categories are grouped as 'other' but remain preserved in category_final.
+    """
+    if pd.isna(category_final):
+        return None
+
+    if category_final == "other":
+        return "other"
+
+    for group_name, categories in CATEGORY_GROUPS.items():
+        if category_final in categories:
+            return group_name
+
+    if category_counts.get(category_final, 0) < RARE_THRESHOLD:
+        return "other"
+
+    return "other"
+
+
 def standardize_category(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Map raw categories into standardized groups:
-      - transport, utility, community buckets
-      - rare categories (< threshold) -> 'other'
-      - noise / invalid values -> 'other'
-      - typo corrections
+    Create:
+      - category_final: cleaned specific category
+      - category_group: broad category used for high-level filtering/reporting
+
+    This avoids losing specific categories like fuel, parking, taxi, etc.
     """
     df = df.copy()
-    category_counts = df["category"].value_counts()
 
-    def map_category(cat):
-        if pd.isna(cat):
-            return None
-        if cat in TRANSPORT_CATEGORIES:
-            return "transport"
-        if cat in UTILITY_CATEGORIES:
-            return "utility"
-        if cat in COMMUNITY_CATEGORIES:
-            return "community"
-        if category_counts.get(cat, 0) < RARE_THRESHOLD:
-            return "other"
-        return cat
+    df["category_final"] = df["category"].apply(clean_specific_category)
+    category_counts = df["category_final"].value_counts()
+    df["category_group"] = df["category_final"].apply(
+        lambda cat: assign_category_group(cat, category_counts)
+    )
 
-    df["category_final"] = df["category"].apply(map_category)
-
-    # Fix typos
-    df["category_final"] = df["category_final"].replace(TYPO_FIXES)
-
-    # Remove noisy values
-    df["category_final"] = df["category_final"].replace(NOISE_CATEGORIES, "other")
-
-    total = len(df["category_final"].value_counts())
-    print(f"[clean] Final unique categories: {total}")
+    print(f"[clean] Specific categories: {df['category_final'].nunique(dropna=True)}")
     print(df["category_final"].value_counts().head(15).to_string())
+    print(f"\n[clean] Category groups: {df['category_group'].nunique(dropna=True)}")
+    print(df["category_group"].value_counts().to_string())
     return df
 
 

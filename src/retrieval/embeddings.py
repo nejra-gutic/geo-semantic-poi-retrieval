@@ -83,19 +83,13 @@ def search_embeddings(
     df_filtered: pd.DataFrame = None,
 ) -> pd.DataFrame:
     if df_filtered is not None:
-        filtered_indices = df_filtered.index.tolist()
-        original_indices = df.index.tolist()
-        mask = [i for i, idx in enumerate(original_indices) if idx in filtered_indices]
-
-        if not mask:
-            print("[embeddings] No POIs after filtering")
-            return pd.DataFrame()
-
+        # koristimo df.index.get_loc za precizne pozicije
+        mask = [df.index.get_loc(idx) for idx in df_filtered.index if idx in df.index]
         embeddings_subset = embeddings[mask]
-        search_df = df_filtered
+        search_df = df_filtered.reset_index(drop=False)
     else:
         embeddings_subset = embeddings
-        search_df = df
+        search_df = df.reset_index(drop=False)
 
     query_embedding = model.encode(
         [query],
@@ -104,8 +98,8 @@ def search_embeddings(
     )
 
     scores = cosine_similarity(query_embedding, embeddings_subset).flatten()
-
     top_indices = np.argsort(scores)[::-1][:top_k]
+    
     results = search_df.iloc[top_indices].copy()
     results["embedding_score"] = scores[top_indices]
 

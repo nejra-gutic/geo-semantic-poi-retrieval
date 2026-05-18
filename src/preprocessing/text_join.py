@@ -5,7 +5,7 @@ Creates a single 'poi_text' field by concatenating normalized columns.
 Used for downstream NLP search and retrieval tasks.
 
 Fields joined:
-  name_norm + brand_norm + category_final + cuisine_clean + addr_norm
+  name_norm + brand_norm + category_final + category_group + cuisine_clean + addr_norm
 """
 
 import pandas as pd
@@ -17,6 +17,7 @@ POI_TEXT_COLS = [
     "name_norm",      # 3x
     "brand_norm",
     "category_final",
+    "category_group",
     "cuisine_clean",
     "cuisine_clean",  # 2x
     "addr_norm",
@@ -63,7 +64,7 @@ def print_coverage(df: pd.DataFrame) -> None:
         print("[text_join] Empty dataframe")
         return
     
-    cols = ["name", "brand", "category_final", "cuisine_clean", "addr:street"]
+    cols = ["name", "brand", "category_final", "category_group", "cuisine_clean", "addr:street"]
     print("\n[text_join] Coverage report:")
     for col in cols:
         if col in df.columns:

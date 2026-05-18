@@ -19,19 +19,27 @@ from src.retrieval.intent_classifier import predict
 from src.preprocessing.normalize import normalize_text as preprocess_text
 
 
+
 INTENT_TO_CATEGORY = {
-    "find_cafe":      ["cafe"],
-    "find_food":      ["restaurant", "fast_food"],
-    "find_service":   ["pharmacy", "doctors", "bank", "hospital", "atm"],
-    "find_shop":      ["convenience", "clothes", "hairdresser"],
-    "find_transport": ["transport"],
+    "find_cafe":      ["cafe", "pub", "bar"],
+    "find_food":      ["restaurant", "fast_food", "bakery", "food_court"],
+    "find_service":   ["pharmacy", "doctors", "bank", "hospital", "atm", "clinic", "dentist"],
+    "find_shop":      ["convenience", "clothes", "supermarket", "furniture", "gift"],
+    # keep concrete transport categories instead of filtering only by generic "transport"
+    "find_transport": [
+        "parking", "parking_space", "parking_entrance", "bicycle_parking",
+        "bicycle_rental", "charging_station", "fuel", "car_repair",
+        "car_parts", "car_wash", "car_rental", "motorcycle_parking",
+        "bicycle_repair_station", "vehicle_inspection", "taxi"
+    ],
     "hours_based":    None,
-    "accessibility":  ["cafe", "restaurant", "shop", "pharmacy", "bar"],  
+    "accessibility":  ["cafe", "restaurant", "fast_food", "pharmacy", "bar", "pub"],
 }
 
 RESULT_COLS = [
     "name",
     "category_final",
+    "category_group",
     "cuisine_clean",
     "addr:street",
     "latitude",

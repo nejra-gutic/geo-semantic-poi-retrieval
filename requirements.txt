@@ -17,3 +17,5 @@ matplotlib>=3.7
 seaborn>=0.12
 
 opening-hours-py>=0.8.0
+
+sentence-transformers>=2.2.0
