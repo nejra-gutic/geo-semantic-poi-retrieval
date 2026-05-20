@@ -106,6 +106,8 @@ def load_vectorizer(path: str = "models/tfidf_vectorizer.pkl") -> TfidfVectorize
     print(f"[tfidf] Vectorizer loaded: {path}")
     return vectorizer
 
+
+
 def compare_ngrams(
     df: pd.DataFrame,
     col: str = "poi_text_lemma",

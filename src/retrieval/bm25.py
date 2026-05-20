@@ -13,7 +13,7 @@ from src.retrieval.normalize import normalize
 
 
 BM25_STOPWORDS = {
-    "me", "find", "place", "places"
+    "me", "find", "place", "places", "close", "by", "nearby", "near"
 }
 
 
@@ -159,6 +159,7 @@ def compare_bm25_tfidf(
             f"{df_filtered.iloc[i]['category_final']} | "
             f"score: {round(tfidf_scores[i], 3)}"
         )
+
 
 def tune_bm25(
     df: pd.DataFrame,

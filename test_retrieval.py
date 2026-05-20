@@ -239,6 +239,91 @@ def evaluate_bm25(
 
     print_metric_summary("BM25", precision_scores, hit_scores, recall_scores, ndcg_scores, k)
 
+def evaluate_tfidf_no_filter(
+    evaluation_queries,
+    df,
+    vectorizer,
+    tfidf_matrix,
+    k: int = 5,
+):
+    precision_scores = []
+    hit_scores = []
+    recall_scores = []
+    ndcg_scores = []
+
+    print("\n\n=== TF-IDF METRICS (no intent filtering) ===")
+
+    for item in evaluation_queries:
+        q = item["query"]
+        expected = item["expected_category"]
+
+        print(f"\nQuery: '{q}'")
+
+        from src.retrieval.tfidf import search_tfidf
+        results = search_tfidf(q, vectorizer, tfidf_matrix, df, top_k=k)
+
+        p, h, r, n = calculate_metrics(results, df, expected, k)
+
+        precision_scores.append(p)
+        hit_scores.append(h)
+        recall_scores.append(r)
+        ndcg_scores.append(n)
+
+        print(f"Expected category: {expected}")
+        print(f"Precision@{k}: {p:.3f}")
+        print(f"Hit@{k}: {h}")
+
+        cols = ["name", "category_final", "similarity_score"]
+        existing_cols = [c for c in cols if c in results.columns]
+        print(results[existing_cols].to_string(index=False))
+
+    print_metric_summary("TF-IDF (no filter)", precision_scores, hit_scores, recall_scores, ndcg_scores, k)
+
+def evaluate_bm25_no_filter(
+    evaluation_queries,
+    df,
+    bm25,
+    k: int = 5,
+):
+    precision_scores = []
+    hit_scores = []
+    recall_scores = []
+    ndcg_scores = []
+
+    print("\n\n=== BM25 METRICS (no intent filtering) ===")
+
+    for item in evaluation_queries:
+        q = item["query"]
+        expected = item["expected_category"]
+
+        print(f"\nQuery: '{q}'")
+
+        # BM25 search na cijelom df — bez intent filteringa
+        results = search_bm25(
+            q,
+            bm25,
+            df,
+            top_k=k,
+        )
+
+        results = results.head(k)
+
+        p, h, r, n = calculate_metrics(results, df, expected, k)
+
+        precision_scores.append(p)
+        hit_scores.append(h)
+        recall_scores.append(r)
+        ndcg_scores.append(n)
+
+        print(f"Expected category: {expected}")
+        print(f"Precision@{k}: {p:.3f}")
+        print(f"Hit@{k}: {h}")
+
+        cols = ["name", "category_final", "bm25_score"]
+        existing_cols = [c for c in cols if c in results.columns]
+        print(results[existing_cols].to_string(index=False))
+
+    print_metric_summary("BM25 (no filter)", precision_scores, hit_scores, recall_scores, ndcg_scores, k)
 
 def evaluate_embeddings(
     evaluation_queries,
@@ -407,6 +492,10 @@ def main():
         intent_vectorizer,
         k=5,
     )
+
+    evaluate_tfidf_no_filter(evaluation_queries, df, vectorizer, tfidf_matrix, k=5)
+    evaluate_bm25_no_filter(evaluation_queries, df, bm25, k=5)
+
 
 
 if __name__ == "__main__":
