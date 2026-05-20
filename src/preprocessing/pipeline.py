@@ -93,3 +93,4 @@ def run(df: pd.DataFrame) -> pd.DataFrame:
     print(f"Output columns: {df_out.columns.tolist()}")
     print("=" * 50)
     return df_out
+

@@ -5,7 +5,8 @@ Creates a single 'poi_text' field by concatenating normalized columns.
 Used for downstream NLP search and retrieval tasks.
 
 Fields joined:
-  name_norm + brand_norm + category_final + category_group + cuisine_clean + addr_norm
+  name_norm + brand_norm + category_final + category_final_clean
+  + category_group + cuisine_clean + addr_norm
 """
 
 import pandas as pd
@@ -14,12 +15,15 @@ import pandas as pd
 POI_TEXT_COLS = [
     "name_norm",
     "name_norm",
-    "name_norm",      # 3x
+    "name_norm",          # boost name 3x
     "brand_norm",
     "category_final",
+    "category_final",     # boost original category 2x
+    "category_final_clean",
+    "category_final_clean",  # boost readable category 2x
     "category_group",
     "cuisine_clean",
-    "cuisine_clean",  # 2x
+    "cuisine_clean",      # boost cuisine 2x
     "addr_norm",
 ]
 
@@ -29,11 +33,25 @@ def build_poi_text(df: pd.DataFrame) -> pd.DataFrame:
     Concatenate normalized text columns into a single 'poi_text' field.
     Missing values are treated as empty strings.
     Multiple spaces are collapsed.
+
+    Also creates 'category_final_clean', where underscores are replaced
+    with spaces, e.g. bicycle_parking -> bicycle parking.
     """
     df = df.copy()
 
+    if "category_final" in df.columns:
+        df["category_final_clean"] = (
+            df["category_final"]
+            .fillna("")
+            .astype(str)
+            .str.replace("_", " ", regex=False)
+        )
+    else:
+        df["category_final_clean"] = ""
+
     available = [col for col in POI_TEXT_COLS if col in df.columns]
-    missing = [col for col in POI_TEXT_COLS if col not in df.columns]
+    missing = sorted(set(col for col in POI_TEXT_COLS if col not in df.columns))
+
     if missing:
         print(f"[text_join] Warning - missing columns (will be skipped): {missing}")
 
@@ -41,7 +59,6 @@ def build_poi_text(df: pd.DataFrame) -> pd.DataFrame:
         print("[text_join] Warning - no text columns available, poi_text set to empty")
         df["poi_text"] = ""
         return df
-
 
     df["poi_text"] = (
         df[available]
@@ -63,8 +80,17 @@ def print_coverage(df: pd.DataFrame) -> None:
     if len(df) == 0:
         print("[text_join] Empty dataframe")
         return
-    
-    cols = ["name", "brand", "category_final", "category_group", "cuisine_clean", "addr:street"]
+
+    cols = [
+        "name",
+        "brand",
+        "category_final",
+        "category_group",
+        "cuisine_clean",
+        "addr:street",
+        "addr_norm",
+    ]
+
     print("\n[text_join] Coverage report:")
     for col in cols:
         if col in df.columns:

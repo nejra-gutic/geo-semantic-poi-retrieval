@@ -12,8 +12,7 @@ Extracts:
 
 import pandas as pd
 import spacy
-
-nlp = spacy.load("en_core_web_sm")
+from src.retrieval.nlp_instance import nlp
 
 
 def extract_linguistic_features(text: str) -> dict:
@@ -45,25 +44,30 @@ def add_linguistic_features(df: pd.DataFrame, col: str = "poi_text") -> pd.DataF
     Default source column is poi_text.
     """
     df = df.copy()
-
     if col not in df.columns:
         print(f"[linguistic] Warning - '{col}' not found, skipping")
         df["pos_tags"] = [[] for _ in range(len(df))]
         df["entities"] = [[] for _ in range(len(df))]
-        df["lemmas"] = [[] for _ in range(len(df))]
+        df["lemmas"]   = [[] for _ in range(len(df))]
         return df
 
     print(f"[linguistic] Processing {df[col].notna().sum()} rows...")
-    features = df[col].apply(extract_linguistic_features)
 
-    df["pos_tags"] = features.apply(lambda x: x["pos_tags"])
-    df["entities"] = features.apply(lambda x: x["entities"])
-    df["lemmas"]   = features.apply(lambda x: x["lemmas"])
+    texts = df[col].fillna("").tolist()
+    docs = list(nlp.pipe(texts, batch_size=256))
+
+    df["pos_tags"] = [[(t.text, t.pos_) for t in doc] for doc in docs]
+    df["entities"] = [[(e.text, e.label_) for e in doc.ents] for doc in docs]
+    df["lemmas"]   = [
+        [t.lemma_.lower() for t in doc if not t.is_stop and not t.is_punct and t.text.strip()]
+        for doc in docs
+    ]
 
     has_entities = df["entities"].apply(len).gt(0).sum()
     has_lemmas   = df["lemmas"].apply(len).gt(0).sum()
     print(f"[linguistic] Rows with entities: {has_entities}")
     print(f"[linguistic] Rows with lemmas:   {has_lemmas}")
+
     return df
 
 

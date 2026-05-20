@@ -19,8 +19,7 @@ Note:
 import re
 import pandas as pd
 import spacy
-
-nlp = spacy.load("en_core_web_sm")
+from src.retrieval.nlp_instance import nlp
 
 # Spatial/relational words that carry meaning in GeoNLP context
 SPATIAL_WORDS = {"in", "at", "on", "near", "by", "next", "around", "between", "off"}

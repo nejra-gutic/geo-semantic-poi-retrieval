@@ -13,9 +13,7 @@ Tested approaches:
 
 import spacy
 import pandas as pd
-
-# Load spaCy model once at module level
-nlp = spacy.load("en_core_web_sm")
+from src.retrieval.nlp_instance import nlp
 
 
 def tokenize(text: str) -> list[str]:
@@ -38,17 +36,16 @@ def tokenize_series(series: pd.Series) -> pd.Series:
 
 
 def add_tokens(df: pd.DataFrame, col: str = "poi_text") -> pd.DataFrame:
-    """
-    Add a tokens column to the dataframe based on a text column.
-    Default source column is poi_text.
-    """
     df = df.copy()
     if col not in df.columns:
         print(f"[tokenize] Warning - '{col}' not found, skipping")
         df["tokens"] = [[] for _ in range(len(df))]
         return df
 
-    df["tokens"] = tokenize_series(df[col])
+    texts = df[col].fillna("").tolist()
+    docs = list(nlp.pipe(texts, batch_size=256))
+    df["tokens"] = [[token.text for token in doc] for doc in docs]
+
     filled = df["tokens"].apply(len).gt(0).sum()
     print(f"[tokenize] Tokenized: {filled} / {len(df)} rows")
     return df

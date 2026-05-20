@@ -69,6 +69,45 @@ def parse_filters(query: str) -> dict:
 
     return filters
 
+def detect_specific_category(query: str):
+    q = query.lower()
+
+    if "bicycle parking" in q or "bike parking" in q:
+        return ["bicycle_parking"]
+
+    if "motorcycle parking" in q:
+        return ["motorcycle_parking"]
+
+    if "bicycle rental" in q or "bike rental" in q:
+        return ["bicycle_rental"]
+
+    if "charging station" in q or "ev charging" in q:
+        return ["charging_station"]
+
+    if "parking" in q:
+        return ["parking", "parking_space", "parking_entrance"]
+
+    # Specifični servisni tipovi — izbjegava miješanje srodnih kategorija
+    if "atm" in q or "cash machine" in q:
+        return ["atm"]
+
+    if "bank" in q:
+        return ["bank"]
+
+    if "pharmacy" in q or "chemist" in q:
+        return ["pharmacy"]
+
+    if "hospital" in q:
+        return ["hospital"]
+
+    if "dentist" in q or "dental" in q:
+        return ["dentist"]
+
+    if "doctor" in q or "clinic" in q:
+        return ["doctors", "clinic"]
+
+    return None
+
 
 def search(
     query: str,
@@ -109,7 +148,13 @@ def search(
         intent, confidence = predict(query, intent_model, intent_vectorizer)
         print(f"[query] Intent: {intent} ({confidence}%)")
 
-        categories = INTENT_TO_CATEGORY.get(intent)
+        specific_categories = detect_specific_category(query)
+
+        if specific_categories:
+            categories = specific_categories
+            print(f"[query] Specific category override: {categories}")
+        else:
+            categories = INTENT_TO_CATEGORY.get(intent)
 
         # hours_based — pokušaj izvući kategoriju iz query-ja direktno
         if intent == "hours_based":

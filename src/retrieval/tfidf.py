@@ -15,27 +15,23 @@ import numpy as np
 from pathlib import Path
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+from src.retrieval.normalize import normalize
 
+def _tfidf_tokenizer(text: str) -> list[str]:
+    # poi_text_lemma je već normaliziran — samo split, bez nlp()
+    tokens = [t for t in text.lower().split() if len(t) > 1]
+    bigrams = [f"{tokens[i]}_{tokens[i+1]}" for i in range(len(tokens) - 1)]
+    return tokens + bigrams
 
 def build_tfidf(
     df: pd.DataFrame,
     col: str = "poi_text_lemma",
     max_features: int = 5000,
     min_df: int = 2,
-    ngram_range: tuple = (1, 2),
 ) -> tuple:
     """
     Build TF-IDF matrix from a text column.
-
-    Args:
-        df:           input dataframe
-        col:          text column to vectorize
-        max_features: maximum vocabulary size
-        min_df:       minimum document frequency
-        ngram_range:  (1,2) includes unigrams and bigrams
-
-    Returns:
-        (vectorizer, tfidf_matrix)
+    N-grami (unigrams + bigrams) su ugrađeni u _tfidf_tokenizer.
     """
     if col not in df.columns:
         print(f"[tfidf] Warning - '{col}' not found, falling back to poi_text")
@@ -44,10 +40,9 @@ def build_tfidf(
     corpus = df[col].fillna("").tolist()
 
     vectorizer = TfidfVectorizer(
+        analyzer=_tfidf_tokenizer,
         max_features=max_features,
         min_df=min_df,
-        ngram_range=ngram_range,
-        token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z]+\b",
     )
 
     tfidf_matrix = vectorizer.fit_transform(corpus)
@@ -136,11 +131,11 @@ def compare_ngrams(
         print(f"{'='*50}")
 
         vec = TfidfVectorizer(
+            analyzer=_tfidf_tokenizer,
             max_features=5000,
             min_df=2,
-            ngram_range=ngram,
-            token_pattern=r"(?u)\b[a-zA-Z][a-zA-Z]+\b",
         )
+        
         matrix = vec.fit_transform(corpus)
 
         for query in test_queries:

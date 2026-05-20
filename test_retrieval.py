@@ -6,7 +6,7 @@ from src.retrieval import pipeline, query, tfidf
 from src.retrieval.intent_classifier import load_model, predict
 from src.retrieval.query import INTENT_TO_CATEGORY, parse_filters
 from src.retrieval.tfidf import compare_ngrams
-from src.retrieval.bm25 import build_bm25, search_bm25, compare_bm25_tfidf
+from src.retrieval.bm25 import build_bm25, search_bm25, compare_bm25_tfidf, tune_bm25
 from src.retrieval.embeddings import (
     load_embedding_model,
     get_or_build_embeddings,
@@ -82,10 +82,24 @@ def filter_by_intent_and_rules(q, df, intent_model, intent_vectorizer):
     print(f"Intent: {intent} ({confidence}%)")
 
     df_filtered = df.copy()
-    categories = INTENT_TO_CATEGORY.get(intent)
+
+    from src.retrieval.query import (
+        INTENT_TO_CATEGORY,
+        detect_specific_category,
+    )
+
+    specific_categories = detect_specific_category(q)
+
+    if specific_categories:
+        categories = specific_categories
+        print(f"Specific category override: {categories}")
+    else:
+        categories = INTENT_TO_CATEGORY.get(intent)
 
     if categories:
-        df_filtered = df_filtered[df_filtered["category_final"].isin(categories)]
+        df_filtered = df_filtered[
+            df_filtered["category_final"].isin(categories)
+        ]
         print(f"Filtered to categories: {categories} ({len(df_filtered)} POIs)")
 
     return df_filtered
@@ -204,7 +218,6 @@ def evaluate_bm25(
             df_filtered=df_filtered,
         )
 
-        results = apply_boolean_filters(q, results)
         results = results.head(k)
 
         p, h, r, n = calculate_metrics(results, df, expected, k)
@@ -358,8 +371,13 @@ def main():
         {"query": "atm close by", "expected_category": "atm"},
         {"query": "bank downtown", "expected_category": "bank"},
         {"query": "pizza place near me", "expected_category": "restaurant"},
+        {"query": "parking near downtown", "expected_category": "parking"},
+        {"query": "bicycle parking nearby", "expected_category": "bicycle_parking"},
        # {"query": "bus stop nearby", "expected_category": "transport"},
     ]
+
+    print("\n\n=== BM25 TUNING ===")
+    tune_bm25(df, evaluation_queries, intent_model, intent_vectorizer)
 
     evaluate_tfidf(
         evaluation_queries,
