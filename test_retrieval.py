@@ -389,6 +389,32 @@ def main():
     vectorizer, tfidf_matrix = tfidf.run(df)
     bm25 = build_bm25(df)
 
+    print("\n=== TOKENIZATION DEBUG ===")
+
+    tfidf.debug_tokenization(
+        "where can i get espresso",
+        df,
+        row_idx=0,
+    )
+
+    tfidf.debug_tokenization(
+        "accessible shop near me",
+        df,
+        row_idx=10,
+    )
+
+    tfidf.debug_tokenization(
+        "need a cashpoint",
+        df,
+        row_idx=20,
+    )
+
+    tfidf.debug_tokenization(
+        "place to lock my bike",
+        df,
+        row_idx=30,
+    )
+
     embedding_model = load_embedding_model()
     poi_embeddings = get_or_build_embeddings(
         df,
@@ -447,54 +473,40 @@ def main():
         )
 
     evaluation_queries = [
-        {"query": "mexican restaurant", "expected_category": "restaurant"},
-        {"query": "coffee near burnside", "expected_category": "cafe"},
-        {"query": "wheelchair accessible cafe", "expected_category": "cafe"},
-        #{"query": "24/7 pharmacy", "expected_category": "pharmacy"},
-        {"query": "italian restaurant takeaway", "expected_category": "restaurant"},
-        {"query": "nearest hospital", "expected_category": "hospital"},
-        {"query": "atm close by", "expected_category": "atm"},
-        {"query": "bank downtown", "expected_category": "bank"},
-        {"query": "pizza place near me", "expected_category": "restaurant"},
-        {"query": "parking near downtown", "expected_category": "parking"},
-        {"query": "bicycle parking nearby", "expected_category": "bicycle_parking"},
-       # {"query": "bus stop nearby", "expected_category": "transport"},
-    ]
+    {"query": "where can i get espresso", "expected_category": "cafe"},
+    {"query": "tacos near me", "expected_category": "restaurant"},
+    {"query": "find me a dentist", "expected_category": "dentist"},
+    {"query": "need a cashpoint", "expected_category": "atm"},
+    {"query": "emergency room nearby", "expected_category": "hospital"},
+    {"query": "where to park my car", "expected_category": "parking"},
+    {"query": "place to lock my bike", "expected_category": "bicycle_parking"},
+    {"query": "gluten free restaurant", "expected_category": "restaurant"},
+    {"query": "place for a haircut", "expected_category": "hairdresser"},
+    {"query": "grab a coffee and work", "expected_category": "cafe"},
+]
 
     print("\n\n=== BM25 TUNING ===")
     tune_bm25(df, evaluation_queries, intent_model, intent_vectorizer)
 
-    evaluate_tfidf(
-        evaluation_queries,
-        df,
-        vectorizer,
-        tfidf_matrix,
-        intent_model,
-        intent_vectorizer,
-        k=5,
-    )
-
-    evaluate_bm25(
-        evaluation_queries,
-        df,
-        bm25,
-        intent_model,
-        intent_vectorizer,
-        k=5,
-    )
-
-    evaluate_embeddings(
-        evaluation_queries,
-        df,
-        embedding_model,
-        poi_embeddings,
-        intent_model,
-        intent_vectorizer,
-        k=5,
-    )
-
-    evaluate_tfidf_no_filter(evaluation_queries, df, vectorizer, tfidf_matrix, k=5)
-    evaluate_bm25_no_filter(evaluation_queries, df, bm25, k=5)
+    for k in [5, 20, 50]:
+        print(f"\n{'='*60}")
+        print(f"EVALUACIJA SA k={k}")
+        print(f"{'='*60}")
+        
+        evaluate_tfidf(
+            evaluation_queries, df, vectorizer, tfidf_matrix,
+            intent_model, intent_vectorizer, k=k,
+        )
+        evaluate_bm25(
+            evaluation_queries, df, bm25,
+            intent_model, intent_vectorizer, k=k,
+        )
+        evaluate_embeddings(
+            evaluation_queries, df, embedding_model, poi_embeddings,
+            intent_model, intent_vectorizer, k=k,
+        )
+        evaluate_tfidf_no_filter(evaluation_queries, df, vectorizer, tfidf_matrix, k=k)
+        evaluate_bm25_no_filter(evaluation_queries, df, bm25, k=k)
 
 
 

@@ -12,16 +12,42 @@ and highlights distinctive terms per POI.
 import pandas as pd
 import pickle
 import numpy as np
+import re
 from pathlib import Path
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from src.retrieval.normalize import normalize
+from src.preprocessing.normalize import normalize_text as preprocess_text
+
 
 def _tfidf_tokenizer(text: str) -> list[str]:
-    # poi_text_lemma je već normaliziran — samo split, bez nlp()
-    tokens = [t for t in text.lower().split() if len(t) > 1]
+    tokens = [t for t in text.lower().split() if len(t) > 1 and not re.match(r'^\d+\w*$', t)]
     bigrams = [f"{tokens[i]}_{tokens[i+1]}" for i in range(len(tokens) - 1)]
     return tokens + bigrams
+
+def debug_tokenization(query: str, df: pd.DataFrame, row_idx: int = 0) -> None:
+    """
+    Spot-check tokenization for one query and one POI document.
+    Useful for comparing query tokens vs document tokens.
+    """
+    query_norm = normalize(query) or query
+    query_tokens = _tfidf_tokenizer(query_norm)
+
+    poi_raw = df.iloc[row_idx].get("poi_text", "")
+    poi_lemma = df.iloc[row_idx].get("poi_text_lemma", "")
+    poi_tokens = _tfidf_tokenizer(str(poi_lemma))
+
+    print("\n=== TF-IDF TOKENIZATION DEBUG ===")
+    print(f"Query raw:        {query}")
+    print(f"Query normalized: {query_norm}")
+    print(f"Query tokens:     {query_tokens}")
+
+    print("\nPOI:")
+    print(f"Name:             {df.iloc[row_idx].get('name', '')}")
+    print(f"Category:         {df.iloc[row_idx].get('category_final', '')}")
+    print(f"POI raw text:     {poi_raw}")
+    print(f"POI lemma text:   {poi_lemma}")
+    print(f"POI tokens:       {poi_tokens[:80]}")
 
 def build_tfidf(
     df: pd.DataFrame,
@@ -55,6 +81,45 @@ def build_tfidf(
 
     return vectorizer, tfidf_matrix
 
+def check_query_doc_tokenization(
+    query: str,
+    vectorizer: TfidfVectorizer,
+    df: pd.DataFrame,
+    row_idx: int = 0,
+) -> None:
+    """
+    Provjera da li query i dokument prolaze kroz identičnu tokenizaciju
+    prije nego stignu u vectorizer.
+    """
+    from src.preprocessing.normalize import normalize_text as preprocess_text
+
+    # Kako query ide kroz pipeline
+    query_preprocessed = preprocess_text(query) or query
+    query_normalized = normalize(query_preprocessed) or query_preprocessed
+    query_tokens = _tfidf_tokenizer(query_normalized)
+
+    # Kako dokument ide kroz pipeline (poi_text_lemma je već normaliziran pri buildu)
+    doc_raw = df.iloc[row_idx].get("poi_text_lemma", "")
+    doc_tokens = _tfidf_tokenizer(str(doc_raw))
+
+    # Što vectorizer vidi za query
+    query_vec = vectorizer.transform([query_normalized])
+    feature_names = vectorizer.get_feature_names_out()
+    nonzero_indices = query_vec.nonzero()[1]
+    query_vocab_hits = [feature_names[i] for i in nonzero_indices]
+
+    print(f"\n=== TOKENIZATION CONSISTENCY CHECK ===")
+    print(f"Query raw:          '{query}'")
+    print(f"After preprocess:   '{query_preprocessed}'")
+    print(f"After normalize:    '{query_normalized}'")
+    print(f"Query tokens:       {query_tokens}")
+    print(f"Query vocab hits:   {query_vocab_hits}")
+    print(f"\nDoc raw (lemma):    '{doc_raw[:100]}...'")
+    print(f"Doc tokens[:20]:    {doc_tokens[:20]}")
+
+    # Presjek — koliko query tokena se pojavljuje u dokumentu
+    overlap = set(query_tokens) & set(doc_tokens)
+    print(f"\nToken overlap:      {overlap}")
 
 def search_tfidf(
     query: str,
@@ -76,7 +141,12 @@ def search_tfidf(
     Returns:
         DataFrame of top_k matching POIs with similarity scores
     """
-    query_vec = vectorizer.transform([query])
+
+    query_norm = normalize(preprocess_text(query) or query)
+    if not query_norm:
+        return pd.DataFrame()
+    query_vec = vectorizer.transform([query_norm])
+    
     scores = cosine_similarity(query_vec, tfidf_matrix).flatten()
 
     top_indices = np.argsort(scores)[::-1][:top_k]
@@ -141,7 +211,8 @@ def compare_ngrams(
         matrix = vec.fit_transform(corpus)
 
         for query in test_queries:
-            query_vec = vec.transform([query])
+            query_norm = normalize(query) or query
+            query_vec = vec.transform([query_norm])
             scores = cosine_similarity(query_vec, matrix).flatten()
             top_indices = np.argsort(scores)[::-1][:3]
 

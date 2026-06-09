@@ -49,7 +49,7 @@ def build_bm25(df: pd.DataFrame, col: str = "poi_text_lemma") -> BM25Okapi:
         col = "poi_text"
 
     corpus = df[col].fillna("").apply(_tokenize_text).tolist()
-    bm25 = BM25Okapi(corpus, k1=0.5, b=1.0)
+    bm25 = BM25Okapi(corpus, k1=1.5, b=0.75)
     print(f"[bm25] Index built on {len(corpus)} documents")
     return bm25
 

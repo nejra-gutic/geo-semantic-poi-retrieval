@@ -11,7 +11,6 @@ import numpy as np
 import pandas as pd
 
 from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
 
 
 MODEL_NAME = "all-MiniLM-L6-v2"
@@ -83,13 +82,28 @@ def search_embeddings(
     df_filtered: pd.DataFrame = None,
 ) -> pd.DataFrame:
     if df_filtered is not None:
-        # koristimo df.index.get_loc za precizne pozicije
-        mask = [df.index.get_loc(idx) for idx in df_filtered.index if idx in df.index]
+        if df_filtered.empty:
+            print(f"[embeddings] Query: '{query}' → 0 results (empty filter)")
+            return pd.DataFrame(columns=list(df.columns) + ["embedding_score"])
+
+        mask = df.index.get_indexer(df_filtered.index)
+        mask = mask[mask >= 0]
+
+        if len(mask) == 0:
+            print(f"[embeddings] Query: '{query}' → 0 results (empty embedding subset)")
+            return pd.DataFrame(columns=list(df.columns) + ["embedding_score"])
+
         embeddings_subset = embeddings[mask]
-        search_df = df_filtered.reset_index(drop=False)
+        search_df = df_filtered.copy()
+        if "poi_id" not in search_df.columns:
+            search_df["poi_id"] = search_df.index
+        search_df = search_df.reset_index(drop=True)
     else:
         embeddings_subset = embeddings
-        search_df = df.reset_index(drop=False)
+        search_df = df.copy()
+        if "poi_id" not in search_df.columns:
+            search_df["poi_id"] = search_df.index
+        search_df = search_df.reset_index(drop=True)
 
     query_embedding = model.encode(
         [query],
@@ -97,11 +111,21 @@ def search_embeddings(
         normalize_embeddings=True,
     )
 
-    scores = cosine_similarity(query_embedding, embeddings_subset).flatten()
+    # Since both query and POI embeddings are normalized,
+    # dot product is equivalent to cosine similarity.
+    scores = embeddings_subset @ query_embedding[0]
+
     top_indices = np.argsort(scores)[::-1][:top_k]
-    
+
     results = search_df.iloc[top_indices].copy()
     results["embedding_score"] = scores[top_indices]
 
     print(f"[embeddings] Query: '{query}' → {len(results)} results")
+
+    if "poi_id" not in results.columns:
+        if "index" in results.columns:
+            results["poi_id"] = results["index"]
+        else:
+            results["poi_id"] = results.index
+
     return results

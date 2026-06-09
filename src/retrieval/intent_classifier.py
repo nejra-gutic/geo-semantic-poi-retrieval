@@ -57,6 +57,9 @@ SYNONYMS = {
     "post office": "service",
     "atm": "service",
     "bank": "service",
+    "cashpoint": "atm",
+    "cash machine": "atm",
+    "emergency room": "hospital",
 
     # shop
     "bookstore": "shop",
@@ -69,6 +72,9 @@ SYNONYMS = {
     "furniture store": "shop",
     "pet store": "shop",
     "gift shop": "shop",
+    "haircut": "hairdresser",
+    "barber": "hairdresser",
+    "hair salon": "hairdresser",
 
     # transport
     "taxi": "transport",

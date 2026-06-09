@@ -5,8 +5,7 @@ Creates a single 'poi_text' field by concatenating normalized columns.
 Used for downstream NLP search and retrieval tasks.
 
 Fields joined:
-  name_norm + brand_norm + category_final + category_final_clean
-  + category_group + cuisine_clean + addr_norm
+  name_norm + brand_norm + category_final + category_group + cuisine_clean + addr_norm
 """
 
 import pandas as pd
@@ -14,18 +13,23 @@ import pandas as pd
 
 POI_TEXT_COLS = [
     "name_norm",
-    "name_norm",
-    "name_norm",          # boost name 3x
     "brand_norm",
     "category_final",
-    "category_final",     # boost original category 2x
-    "category_final_clean",
-    "category_final_clean",  # boost readable category 2x
     "category_group",
     "cuisine_clean",
-    "cuisine_clean",      # boost cuisine 2x
     "addr_norm",
 ]
+
+CATEGORY_SYNONYMS = {
+    "veterinary":  "vet veterinary animal hospital",
+    "hairdresser": "hairdresser haircut barber salon",
+    "books":       "books bookshop bookstore",
+    "car_repair":  "car_repair mechanic garage auto",
+    "optician":    "optician eye doctor glasses vision",
+    "pet":         "pet store pets animals",
+    "bicycle":     "bicycle bike cycling",
+    "electronics": "electronics gadgets tech store",
+}
 
 
 def build_poi_text(df: pd.DataFrame) -> pd.DataFrame:
@@ -33,21 +37,8 @@ def build_poi_text(df: pd.DataFrame) -> pd.DataFrame:
     Concatenate normalized text columns into a single 'poi_text' field.
     Missing values are treated as empty strings.
     Multiple spaces are collapsed.
-
-    Also creates 'category_final_clean', where underscores are replaced
-    with spaces, e.g. bicycle_parking -> bicycle parking.
     """
     df = df.copy()
-
-    if "category_final" in df.columns:
-        df["category_final_clean"] = (
-            df["category_final"]
-            .fillna("")
-            .astype(str)
-            .str.replace("_", " ", regex=False)
-        )
-    else:
-        df["category_final_clean"] = ""
 
     available = [col for col in POI_TEXT_COLS if col in df.columns]
     missing = sorted(set(col for col in POI_TEXT_COLS if col not in df.columns))
@@ -68,6 +59,20 @@ def build_poi_text(df: pd.DataFrame) -> pd.DataFrame:
         .str.strip()
     )
 
+    # Synonym augmentacija — dodaje kolokvijalne termine u poi_text
+    # da se poklapa sa korisničkim queryjima koji koriste neformalne termine
+    if "category_final" in df.columns:
+        def augment_synonyms(row):
+            cat = str(row.get("category_final", ""))
+            extra = CATEGORY_SYNONYMS.get(cat, "")
+            if extra:
+                return row["poi_text"] + " " + extra
+            return row["poi_text"]
+
+        df["poi_text"] = df.apply(augment_synonyms, axis=1)
+        augmented = df["category_final"].isin(CATEGORY_SYNONYMS.keys()).sum()
+        print(f"[text_join] Synonym augmentation applied to {augmented} POIs")
+
     empty_count = (df["poi_text"] == "").sum()
     print(f"[text_join] poi_text created for {len(df) - empty_count} / {len(df)} rows")
     print(f"[text_join] Sample:\n{df['poi_text'].dropna().head(3).to_string()}")
@@ -87,7 +92,6 @@ def print_coverage(df: pd.DataFrame) -> None:
         "category_final",
         "category_group",
         "cuisine_clean",
-        "addr:street",
         "addr_norm",
     ]
 
