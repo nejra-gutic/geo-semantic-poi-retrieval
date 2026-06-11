@@ -32,7 +32,7 @@ from src.retrieval.embeddings import (
 
 
 DATA_PATH = "data/processed/cleaned_pois.csv"
-RELEVANCE_PATH = "data/relevance_labels_expanded.csv"
+RELEVANCE_PATH = "data/relevance_labels_test.csv"
 INTENT_MODEL_PATH = "models/intent_classifier.pkl"
 EMBEDDINGS_PATH = "models/poi_embeddings.npy"
 
@@ -344,8 +344,8 @@ def main():
             hybrid["emb_norm"] = 0
 
         hybrid["hybrid_score"] = (
-            0.2 * hybrid["bm25_norm"]
-            + 0.8 * hybrid["emb_norm"]
+            0.1 * hybrid["bm25_norm"]
+            + 0.9 * hybrid["emb_norm"]
         )
 
         results = hybrid.sort_values(

@@ -16,7 +16,7 @@ from src.retrieval.bm25 import build_bm25, search_bm25
 from src.retrieval.embeddings import load_embedding_model, get_or_build_embeddings, search_embeddings
 
 K_VALUES = [5, 10, 20, 50]
-RELEVANCE_PATH = "data/relevance_labels_expanded.csv"
+RELEVANCE_PATH = "data/relevance_labels_validation.csv"
 
 # === UČITAJ PODATKE ===
 df = load_csv("data/processed/cleaned_pois.csv")
@@ -90,7 +90,7 @@ def evaluate_weights(w_bm25, w_emb):
         results = hybrid.sort_values("hybrid_score", ascending=False).head(50)
         retrieved_ids = results["poi_id"].tolist()
 
-        ndcg_10_scores.append(ndcg_at_k(retrieved_ids, relevant_ids, 10))
+        ndcg_10_scores.append(ndcg_at_k(retrieved_ids, relevant_ids, 5))
 
     return np.mean(ndcg_10_scores)
 
@@ -100,7 +100,7 @@ best_score = -1
 best_params = {}
 results_table = []
 
-print(f"{'w_bm25':>8} {'w_emb':>8} {'NDCG@10':>10}")
+print(f"{'w_bm25':>8} {'w_emb':>8} {'NDCG@5':>10}")
 print("-" * 30)
 
 for w_bm25 in weights:
@@ -113,4 +113,4 @@ for w_bm25 in weights:
         best_score = score
         best_params = {"w_bm25": w_bm25, "w_emb": w_emb}
 
-print(f"\nBest: w_bm25={best_params['w_bm25']}, w_emb={best_params['w_emb']} → NDCG@10: {best_score:.4f}")
+print(f"\nBest: w_bm25={best_params['w_bm25']}, w_emb={best_params['w_emb']} → NDCG@5: {best_score:.4f}")

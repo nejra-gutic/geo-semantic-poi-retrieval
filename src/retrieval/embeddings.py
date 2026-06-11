@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 
 from sentence_transformers import SentenceTransformer
+from src.retrieval.normalize import normalize
+from src.preprocessing.normalize import normalize_text as preprocess_text
 
 
 MODEL_NAME = "all-MiniLM-L6-v2"
