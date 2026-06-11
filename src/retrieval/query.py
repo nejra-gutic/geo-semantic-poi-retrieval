@@ -17,6 +17,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from src.retrieval.normalize import normalize
 from src.retrieval.intent_classifier import predict
 from src.preprocessing.normalize import normalize_text as preprocess_text
+from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER
 
 
 QUERY_SYNONYMS = {
@@ -154,6 +155,8 @@ def search(
     intent_model=None,
     intent_vectorizer=None,
     top_k: int = 10,
+    user_lat: float = None,
+    user_lon: float = None,
 ) -> pd.DataFrame:
     # Expand synonyms before anything else
     query = expand_query_synonyms(query)
@@ -235,6 +238,19 @@ def search(
     existing_cols = [col for col in RESULT_COLS if col in results.columns]
     results = results[existing_cols + ["similarity_score"]].head(top_k)
 
+    # Apply geo re-ranking if location provided or "near me" in query
+    near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
+    if near_me:
+        lat = user_lat or PORTLAND_CENTER[0]
+        lon = user_lon or PORTLAND_CENTER[1]
+        if "latitude" in results.columns and "longitude" in results.columns:
+            results = combine_with_geo(
+                results,
+                lat,
+                lon,
+                score_col="similarity_score",
+            )
+
     print(f"[query] Results found: {len(results)}")
     return results
 
@@ -257,7 +273,9 @@ def run_interactive(
             continue
 
         results = search(
-            query, df, vectorizer, tfidf_matrix, intent_model, intent_vectorizer
+            query, df, vectorizer, tfidf_matrix, intent_model, intent_vectorizer,
+            user_lat=PORTLAND_CENTER[0],
+            user_lon=PORTLAND_CENTER[1],
         )
         if results.empty:
             print("No results found.\n")
