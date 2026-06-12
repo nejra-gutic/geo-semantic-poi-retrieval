@@ -404,6 +404,54 @@ def main():
         print(f"[rrf] Query: '{query}' → {len(results)} results")
 
         return results
+    
+    def hybrid_geo(query):
+        bm25_results = search_bm25(query, bm25, df, top_k=200)
+        emb_results = search_embeddings(query, embedding_model, poi_embeddings, df, top_k=200)
+
+        bm25_results = ensure_poi_id(bm25_results)
+        emb_results = ensure_poi_id(emb_results)
+
+        if "bm25_score" not in bm25_results.columns:
+            score_cols = [c for c in bm25_results.columns if "score" in c.lower()]
+            if score_cols:
+                bm25_results = bm25_results.rename(columns={score_cols[0]: "bm25_score"})
+            else:
+                bm25_results["bm25_score"] = 1.0
+
+        bm25_scores = bm25_results[["poi_id", "bm25_score"]].copy()
+        emb_scores = emb_results[["poi_id", "embedding_score"]].copy()
+
+        hybrid = pd.merge(bm25_scores, emb_scores, on="poi_id", how="outer").fillna(0)
+
+        if hybrid["bm25_score"].max() > hybrid["bm25_score"].min():
+            hybrid["bm25_norm"] = MinMaxScaler().fit_transform(hybrid[["bm25_score"]])
+        else:
+            hybrid["bm25_norm"] = 0
+
+        if hybrid["embedding_score"].max() > hybrid["embedding_score"].min():
+            hybrid["emb_norm"] = MinMaxScaler().fit_transform(hybrid[["embedding_score"]])
+        else:
+            hybrid["emb_norm"] = 0
+
+        hybrid["hybrid_score"] = 0.1 * hybrid["bm25_norm"] + 0.9 * hybrid["emb_norm"]
+
+        results = hybrid.sort_values("hybrid_score", ascending=False).head(max(K_VALUES))
+        results = ensure_poi_id(results)
+
+        # Merge latitude/longitude za geo
+        results = results.merge(df[["poi_id", "latitude", "longitude"]], on="poi_id", how="left")
+
+        from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER
+        results = combine_with_geo(
+            results,
+            PORTLAND_CENTER[0],
+            PORTLAND_CENTER[1],
+            score_col="hybrid_score",
+        )
+
+        print(f"[hybrid_geo] Query: '{query}' → {len(results)} results")
+        return results
 
     evaluate(
         "TF-IDF (with intent filter)",
@@ -458,6 +506,14 @@ def main():
         queries,
         relevance_labels,
         rrf_bm25_embeddings,
+        K_VALUES,
+    )
+
+    evaluate(
+        "Hybrid BM25 + Embeddings + Geo",
+        queries,
+        relevance_labels,
+        hybrid_geo,
         K_VALUES,
     )
 
