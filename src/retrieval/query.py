@@ -20,17 +20,25 @@ from src.preprocessing.normalize import normalize_text as preprocess_text
 from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER
 
 
+
 QUERY_SYNONYMS = {
-    "cashpoint":     "atm",
-    "cash machine":  "atm",
-    "haircut":       "hairdresser",
-    "barber":        "hairdresser",
-    "hair salon":    "hairdresser",
+    "cashpoint":      "atm",
+    "cash machine":   "atm",
+    "haircut":        "hairdresser",
+    "barber":         "hairdresser",
+    "hair salon":     "hairdresser",
     "emergency room": "hospital",
-    "a&e":           "hospital",
-    "vet ":          "veterinary ",   
-    "bookshop":      "books",
-    "book shop":     "books",
+    "a&e":            "hospital",
+    "vet ":           "veterinary ",
+    "chemist":        "pharmacy",
+    "drugstore":      "pharmacy",
+    "supermarket":    "convenience",
+    "grocery store":  "convenience",
+    "gas station":    "fuel",
+    "petrol station": "fuel",
+    "ev charger":     "charging_station",
+    "bike rental":    "bicycle_rental",
+    "car park":       "parking",
 }
 
 INTENT_TO_CATEGORY = {
