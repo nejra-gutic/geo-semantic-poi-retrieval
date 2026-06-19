@@ -21,23 +21,19 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
 <style>
-    /* Import font */
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
 
     html, body, [class*="css"] {
         font-family: 'Inter', sans-serif;
     }
 
-    /* Hide streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
 
-    /* Main background */
     .stApp {
         background-color: #0f1117;
     }
 
-    /* Header */
     .header-container {
         padding: 2rem 0 1rem 0;
         border-bottom: 1px solid #1e2530;
@@ -62,7 +58,6 @@ st.markdown("""
         color: #3b82f6;
     }
 
-    /* Search input */
     .stTextInput > div > div > input {
         background-color: #1a1f2e !important;
         border: 1.5px solid #2d3748 !important;
@@ -82,7 +77,6 @@ st.markdown("""
         color: #4b5563 !important;
     }
 
-    /* Selectbox */
     .stSelectbox > div > div {
         background-color: #1a1f2e !important;
         border: 1.5px solid #2d3748 !important;
@@ -90,7 +84,6 @@ st.markdown("""
         color: #ffffff !important;
     }
 
-    /* Results count badge */
     .results-badge {
         display: inline-flex;
         align-items: center;
@@ -105,13 +98,11 @@ st.markdown("""
         margin-bottom: 1rem;
     }
 
-    /* Dataframe */
     .stDataFrame {
         border-radius: 10px !important;
         overflow: hidden;
     }
 
-    /* Labels */
     .stTextInput label, .stSelectbox label {
         color: #9ca3af !important;
         font-size: 0.8rem !important;
@@ -120,7 +111,6 @@ st.markdown("""
         letter-spacing: 0.05em !important;
     }
 
-    /* Subheader */
     h3 {
         color: #e5e7eb !important;
         font-weight: 600 !important;
@@ -128,17 +118,14 @@ st.markdown("""
         letter-spacing: -0.01em !important;
     }
 
-    /* Spinner */
     .stSpinner > div {
         border-top-color: #3b82f6 !important;
     }
 
-    /* Warning */
     .stAlert {
         border-radius: 10px !important;
     }
 
-    /* Method badge */
     .method-tag {
         display: inline-block;
         background: #064e3b;
@@ -150,50 +137,31 @@ st.markdown("""
         font-weight: 600;
         margin-left: 0.5rem;
     }
+
+    .location-note {
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-top: 0.3rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 PORTLAND_CENTER = [45.5051, -122.6750]
 
 CATEGORY_ICONS = {
-    "cafe": "☕",
-    "coffee": "☕",
-    "restaurant": "🍽️",
-    "fast_food": "🍔",
-    "pharmacy": "💊",
-    "hospital": "🏥",
-    "dentist": "🦷",
-    "doctors": "👨‍⚕️",
-    "clinic": "🏥",
-    "veterinary": "🐾",
-    "bank": "🏦",
-    "atm": "💳",
-    "parking": "🅿️",
-    "parking_space": "🅿️",
-    "bicycle_rental": "🚲",
-    "charging_station": "⚡",
-    "books": "📚",
-    "clothes": "👕",
-    "electronics": "💻",
-    "hairdresser": "✂️",
-    "pet": "🐶",
-    "fuel": "⛽",
+    "cafe": "☕", "coffee": "☕", "restaurant": "🍽️", "fast_food": "🍔",
+    "pharmacy": "💊", "hospital": "🏥", "dentist": "🦷", "doctors": "👨‍⚕️",
+    "clinic": "🏥", "veterinary": "🐾", "bank": "🏦", "atm": "💳",
+    "parking": "🅿️", "parking_space": "🅿️", "bicycle_rental": "🚲",
+    "charging_station": "⚡", "books": "📚", "clothes": "👕",
+    "electronics": "💻", "hairdresser": "✂️", "pet": "🐶", "fuel": "⛽",
 }
 
 MARKER_COLORS = {
-    "cafe": "blue",
-    "coffee": "blue",
-    "restaurant": "red",
-    "fast_food": "red",
-    "pharmacy": "green",
-    "hospital": "green",
-    "dentist": "green",
-    "veterinary": "purple",
-    "bank": "orange",
-    "atm": "orange",
-    "parking": "gray",
-    "books": "darkblue",
-    "clothes": "pink",
+    "cafe": "blue", "coffee": "blue", "restaurant": "red", "fast_food": "red",
+    "pharmacy": "green", "hospital": "green", "dentist": "green",
+    "veterinary": "purple", "bank": "orange", "atm": "orange",
+    "parking": "gray", "books": "darkblue", "clothes": "pink",
 }
 
 
@@ -222,11 +190,11 @@ def load_models():
     return df, intent_model, intent_vectorizer, vectorizer, tfidf_matrix, bm25, embedding_model, poi_embeddings
 
 
-def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_matrix, bm25, embedding_model, poi_embeddings, method):
+def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_matrix, bm25, embedding_model, poi_embeddings, method, user_lat, user_lon):
     from sklearn.preprocessing import MinMaxScaler
     from src.retrieval.bm25 import search_bm25
     from src.retrieval.embeddings import search_embeddings
-    from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER as PC
+    from src.retrieval.geo import combine_with_geo, haversine_distance
     from src.retrieval.query import search
 
     if method == "TF-IDF":
@@ -238,11 +206,9 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             intent_vectorizer=intent_vectorizer,
             top_k=10,
         )
-        return results
 
     elif method == "Embeddings":
         results = search_embeddings(query, embedding_model, poi_embeddings, df, top_k=10)
-        return results
 
     elif method == "Hybrid":
         bm25_results = search_bm25(query, bm25, df, top_k=200)
@@ -280,16 +246,24 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
 
         results = df.loc[df.index.isin(top["poi_id"])].copy()
         results = results.merge(top[["poi_id", "hybrid_score"]], left_index=True, right_on="poi_id", how="left")
-        print('latitude in results after merge:', 'latitude' in results.columns)
 
         near_me = any(w in query.lower() for w in ["near me", "nearby", "close by"])
-        print('near_me detected:', near_me)
         if near_me and "latitude" in results.columns and "longitude" in results.columns:
-            results = combine_with_geo(results, PC[0], PC[1], score_col="hybrid_score")
+            results = combine_with_geo(results, user_lat, user_lon, score_col="hybrid_score")
 
-        return results
+    else:
+        return pd.DataFrame()
 
-    return pd.DataFrame()
+    # Add distance_km column for transparency (regardless of method)
+    if not results.empty and "latitude" in results.columns and "longitude" in results.columns:
+        results = results.copy()
+        results["distance_km"] = results.apply(
+            lambda r: round(haversine_distance(user_lat, user_lon, r["latitude"], r["longitude"]), 2)
+            if pd.notna(r.get("latitude")) and pd.notna(r.get("longitude")) else None,
+            axis=1,
+        )
+
+    return results
 
 
 # === HEADER ===
@@ -314,13 +288,24 @@ with col1:
 with col2:
     method = st.selectbox("METHOD", ["Hybrid", "Embeddings", "TF-IDF"])
 
+with st.expander("📍 Set test location (default: Portland city center)"):
+    loc_col1, loc_col2 = st.columns(2)
+    with loc_col1:
+        user_lat = st.number_input("Latitude", value=PORTLAND_CENTER[0], format="%.6f")
+    with loc_col2:
+        user_lon = st.number_input("Longitude", value=PORTLAND_CENTER[1], format="%.6f")
+    st.markdown(
+        '<p class="location-note">Try Powell\'s Books: 45.523000, -122.681500 · Pioneer Courthouse Square: 45.518900, -122.679400</p>',
+        unsafe_allow_html=True,
+    )
+
 # === SEARCH ===
 if query:
     with st.spinner("Searching..."):
         results = run_search(
             query, df, intent_model, intent_vectorizer,
             vectorizer, tfidf_matrix, bm25, embedding_model, poi_embeddings,
-            method
+            method, user_lat, user_lon,
         )
 
     if results is None or results.empty:
@@ -340,7 +325,7 @@ if query:
             center_lat = valid_results["latitude"].mean()
             center_lon = valid_results["longitude"].mean()
         else:
-            center_lat, center_lon = PORTLAND_CENTER
+            center_lat, center_lon = user_lat, user_lon
 
         m = folium.Map(
             location=[center_lat, center_lon],
@@ -348,18 +333,30 @@ if query:
             tiles="CartoDB dark_matter",
         )
 
+        # Mark user location
+        folium.Marker(
+            [user_lat, user_lon],
+            tooltip="📍 Your location",
+            icon=folium.Icon(color="red", icon="user", prefix="fa"),
+        ).add_to(m)
+
         score_col = next((c for c in ["combined_score", "hybrid_score", "embedding_score", "similarity_score"] if c in results.columns), None)
 
-        for i, (_, row) in enumerate(valid_results.iterrows()):
+        for _, row in valid_results.iterrows():
             name = row.get("name", "Unknown")
             category = row.get("category_final", "")
             address = row.get("addr:street", "")
+            distance = row.get("distance_km")
             icon_emoji = CATEGORY_ICONS.get(category, "📍")
             marker_color = MARKER_COLORS.get(category, "blue")
 
             score_text = ""
             if score_col and pd.notna(row.get(score_col)):
                 score_text = f"<br><span style='color:#93c5fd;font-size:11px'>Score: {row[score_col]:.3f}</span>"
+
+            dist_text = ""
+            if distance is not None and pd.notna(distance):
+                dist_text = f"<br><span style='color:#fbbf24;font-size:11px'>📏 {distance} km away</span>"
 
             addr_text = f"<br><span style='color:#9ca3af;font-size:11px'>{address}</span>" if address and address != "None" else ""
 
@@ -368,6 +365,7 @@ if query:
                 <b style='font-size:13px;color:#111'>{icon_emoji} {name}</b>
                 <br><span style='color:#6b7280;font-size:11px;text-transform:uppercase'>{category}</span>
                 {addr_text}
+                {dist_text}
                 {score_text}
             </div>
             """
@@ -384,7 +382,7 @@ if query:
         # Results table
         st.subheader(f"Top {len(results)} results")
 
-        display_cols = ["name", "category_final", "addr:street"]
+        display_cols = ["name", "category_final", "addr:street", "distance_km"]
         if score_col:
             display_cols.append(score_col)
             results = results.sort_values(score_col, ascending=False)
@@ -395,6 +393,7 @@ if query:
             "name": "Name",
             "category_final": "Category",
             "addr:street": "Address",
+            "distance_km": "Distance (km)",
             "hybrid_score": "Score",
             "embedding_score": "Score",
             "similarity_score": "Score",
@@ -410,7 +409,12 @@ if query:
         st.dataframe(display_df, width='stretch', height=350)
 
 else:
-    m = folium.Map(location=PORTLAND_CENTER, zoom_start=12, tiles="CartoDB dark_matter")
+    m = folium.Map(location=[user_lat, user_lon], zoom_start=12, tiles="CartoDB dark_matter")
+    folium.Marker(
+        [user_lat, user_lon],
+        tooltip="📍 Your location",
+        icon=folium.Icon(color="red", icon="user", prefix="fa"),
+    ).add_to(m)
     st_folium(m, width=None, height=480, returned_objects=[])
     st.markdown("""
     <div style='text-align:center;color:#4b5563;padding:1rem 0;font-size:0.875rem'>
