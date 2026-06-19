@@ -434,7 +434,7 @@ def main():
         else:
             hybrid["emb_norm"] = 0
 
-        hybrid["hybrid_score"] = 0.2 * hybrid["bm25_norm"] + 0.8 * hybrid["emb_norm"]
+        hybrid["hybrid_score"] = 0.1 * hybrid["bm25_norm"] + 0.9 * hybrid["emb_norm"]
 
         results = hybrid.sort_values("hybrid_score", ascending=False).head(max(K_VALUES))
         results = ensure_poi_id(results)
