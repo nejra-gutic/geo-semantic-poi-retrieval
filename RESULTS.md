@@ -40,7 +40,7 @@ evaluation → data leakage risk. No formal validation/test split yet.
 | TF-IDF (no filter)    | 0.643  |
 | BM25 (no filter)      | 0.663  |
 
-After adding "near me" queries, weights retuned: **0.2 (BM25) / 0.8 (Embeddings)**.
+After adding "near me" queries, weights retuned: **0.1 (BM25) / 0.9 (Embeddings)**.
 With this weighting on the same set: **Hybrid NDCG@5 = 0.831**, beating all
 standalone methods including Embeddings.
 
@@ -59,12 +59,12 @@ standalone methods including Embeddings.
   `train station downtown`, `nearest tram stop`, `24 hour pharmacy nearby`,
   `are any pharmacies open 24/7`).
 - Split: **224 validation / 97 test**.
-- Grid search re-run → weights confirmed stable at **0.2 / 0.8**.
+- Grid search re-run → weights confirmed stable at **0.1 / 0.9**.
 
 | Method              | NDCG@5 |
 |----------------------|--------|
 | Embeddings           | 0.742  ← best single method |
-| Hybrid (0.2/0.8)      | 0.740  |
+| Hybrid (0.1/0.9)      | 0.740  |
 | TF-IDF (filter)       | 0.739  |
 | BM25 (filter)         | 0.655  |
 | RRF                   | 0.728  |
@@ -94,7 +94,7 @@ perform on the full range of real user needs.
 
 ## Stable conclusions across all versions
 
-- **Hybrid weights 0.2 (BM25) / 0.8 (Embeddings)** are stable — confirmed via
+- **Hybrid weights 0.1 (BM25) / 0.9 (Embeddings)** are stable — confirmed via
   grid search on three different validation sets (v1, v2, v3).
 - **Embeddings consistently outperform lexical methods (TF-IDF/BM25) on
   semantic-heavy queries** — generic OSM POI names (e.g. "unknown",
