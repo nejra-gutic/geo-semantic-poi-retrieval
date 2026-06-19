@@ -4,7 +4,7 @@ main.py
 Entry point for the OSM POI preprocessing pipeline.
 
 Usage:
-    python main.py --input data/raw/pois_portland_oregon_usa.geojson --output data/processed/cleaned_pois
+    python3 main.py --input data/raw/pois_portland_oregon_usa.geojson --output data/processed/cleaned_pois
 """
 
 import argparse
