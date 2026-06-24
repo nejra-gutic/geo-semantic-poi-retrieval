@@ -11,6 +11,8 @@ Usage:
                      intent_model, intent_vectorizer)
 """
 
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
@@ -18,7 +20,7 @@ from src.retrieval.normalize import normalize
 from src.retrieval.intent_classifier import predict
 from src.preprocessing.normalize import normalize_text as preprocess_text
 from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER
-
+from src.retrieval.hours import is_open_now
 
 
 QUERY_SYNONYMS = {
@@ -32,8 +34,6 @@ QUERY_SYNONYMS = {
     "vet ":           "veterinary ",
     "chemist":        "pharmacy",
     "drugstore":      "pharmacy",
-    "supermarket":    "convenience",
-    "grocery store":  "convenience",
     "gas station":    "fuel",
     "petrol station": "fuel",
     "ev charger":     "charging_station",
@@ -71,6 +71,7 @@ RESULT_COLS = [
     "wheelchair_accessible",
     "has_takeaway",
     "is_24_7",
+    "opening_hours",
 ]
 
 
@@ -91,6 +92,12 @@ def parse_filters(query: str) -> dict:
         filters["has_takeaway"] = 1
     if any(w in q for w in ["24/7", "24 7", "open 24", "always open"]):
         filters["is_24_7"] = True
+    if any(w in q for w in [
+        "open now", "open right now", "still open", "open today",
+        "open this", "open late", "open early", "open after",
+        "currently open", "open at", "open until",
+    ]):
+        filters["open_now"] = True
 
     return filters
 
@@ -136,14 +143,14 @@ def detect_specific_category(query: str):
 
     if "haircut" in q or "barber" in q or "hair salon" in q:
         return ["hairdresser"]
-    
+
     if "vet" in q or "veterinary" in q or "animal" in q:
         return ["veterinary"]
 
     if "optician" in q or "eye doctor" in q or "eye care" in q:
         return ["optician", "doctors", "clinic"]
 
-    if "bookshop" in q or "bookstore" in q or "book shop" in q:
+    if "bookshop" in q or "bookstore" in q or "book shop" in q or "book" in q:
         return ["books"]
 
     if "pet store" in q or "pet shop" in q:
@@ -153,6 +160,39 @@ def detect_specific_category(query: str):
         return ["electronics", "radiotechnics"]
 
     return None
+
+
+def apply_open_now_filter(results: pd.DataFrame, check_time: datetime = None, boost: float = 0.5) -> pd.DataFrame:
+    """
+    Annotate results with 'is_open_now' (True/False/None) and drop only
+    POIs CONFIRMED closed. POIs with unknown hours are kept (flagged), since
+    we don't want to penalize missing OSM data.
+
+    Confirmed-open POIs get a score boost so they rank above unknown-hours
+    POIs with similar text relevance (otherwise "open now" has no effect
+    on ranking, only on filtering).
+    """
+    if "opening_hours" not in results.columns or results.empty:
+        results = results.copy()
+        results["is_open_now"] = None
+        return results
+
+    results = results.copy()
+    results["is_open_now"] = results["opening_hours"].apply(
+        lambda h: is_open_now(h, check_time) if pd.notna(h) else None
+    )
+
+    before = len(results)
+    results = results[results["is_open_now"] != False]
+    print(f"[query] open_now filter: {before} → {len(results)} (dropped confirmed-closed only)")
+
+    if "similarity_score" in results.columns:
+        results["similarity_score"] = results["similarity_score"] + results["is_open_now"].apply(
+            lambda v: boost if v is True else 0.0
+        )
+        results = results.sort_values("similarity_score", ascending=False)
+
+    return results
 
 
 def search(
@@ -165,6 +205,7 @@ def search(
     top_k: int = 10,
     user_lat: float = None,
     user_lon: float = None,
+    check_time: datetime = None,
 ) -> pd.DataFrame:
     # Expand synonyms before anything else
     query = expand_query_synonyms(query)
@@ -201,6 +242,9 @@ def search(
                 "bar": ["bar"],
                 "shop": ["convenience", "clothes"],
                 "grocery": ["convenience"],
+                "bank": ["bank"],
+                "bakery": ["bakery"],
+                "library": ["library"],
             }
             for keyword, cats in keyword_to_category.items():
                 if keyword in query.lower():
@@ -237,16 +281,23 @@ def search(
         results = df_filtered.copy()
         results["similarity_score"] = 0.0
 
-    # Apply boolean filters
+    # Apply boolean filters (wheelchair, takeaway, is_24_7)
     for col, val in filters.items():
+        if col in ("open_now",):
+            continue  # handled separately below
         if col in results.columns:
             results = results[results[col] == val]
 
+    # Apply open_now filter (requires parsing opening_hours per row)
+    if filters.get("open_now"):
+        results = apply_open_now_filter(results, check_time=check_time)
+
     # Keep only relevant columns
     existing_cols = [col for col in RESULT_COLS if col in results.columns]
-    results = results[existing_cols + ["similarity_score"]].head(top_k)
+    extra_cols = [c for c in ["is_open_now"] if c in results.columns]
+    results = results[existing_cols + extra_cols + ["similarity_score"]].head(top_k)
 
-    # Apply geo re-ranking if location provided or "near me" in query
+    # Apply geo re-ranking if "near me" in query
     near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
     if near_me:
         lat = user_lat or PORTLAND_CENTER[0]
