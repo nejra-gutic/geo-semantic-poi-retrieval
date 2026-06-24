@@ -22,7 +22,7 @@ Usage:
 """
 
 import re
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 DAY_MAP = {
     "Mo": 0, "Tu": 1, "We": 2, "Th": 3, "Fr": 4, "Sa": 5, "Su": 6,
@@ -124,12 +124,15 @@ def parse_opening_hours(hours_str: str) -> dict | None:
                 schedule[d].extend(time_ranges)
             continue
 
-        # General rule: "<days> <time1>,<time2>,..." (allow spaces around commas)
-        general_match = re.match(r"^([A-Za-z,\-]+)\s+(.+)$", rule)
+        # General rule: "<days> <time1>,<time2>,..."
+        # Day part may contain spaces after commas (e.g. "Sa, Su"), so match
+        # everything up to the first digit as the day part.
+        general_match = re.match(r"^([A-Za-z,\-\s]+?)\s*(\d.+)$", rule)
         if not general_match:
             return None  # unparseable rule -> whole string treated as unknown
 
         day_part, time_part = general_match.groups()
+        day_part = day_part.strip()
         days = _expand_day_range(day_part)
         if not days:
             return None
@@ -173,6 +176,63 @@ def is_open_now(hours_str: str, check_time: datetime = None) -> bool | None:
             return True
 
     return False
+
+
+def resolve_check_time(query: str, base_time: datetime = None) -> datetime:
+    """
+    Determine WHEN to check open status based on query phrasing, instead of
+    always checking 'right now'.
+
+    Handles:
+      - "now" / "right now" / "currently" / "today" -> base_time as-is
+      - "late" / "tonight" / "after midnight" -> estimate 22:00 same day
+      - "early morning" / "before Xam" -> estimate 07:00 same day
+      - specific weekday mentioned ("saturday", "sunday", ...) -> same time,
+        but shifted to the next occurrence of that weekday
+      - default -> base_time (treated as "now")
+
+    This is a heuristic, not a full NLP time parser - it's meant to cover
+    the common phrasings seen in the eval set.
+    """
+    if base_time is None:
+        base_time = datetime.now()
+
+    q = query.lower()
+
+    weekday_names = {
+        "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+        "friday": 4, "saturday": 5, "sunday": 6,
+    }
+    target_weekday = None
+    for name, idx in weekday_names.items():
+        if name in q:
+            target_weekday = idx
+            break
+
+    check_time = base_time
+
+    if any(w in q for w in ["late", "tonight", "after midnight", "this evening", "all night"]):
+        check_time = check_time.replace(hour=22, minute=0, second=0, microsecond=0)
+    elif any(w in q for w in ["early morning", "before 7", "before 8"]):
+        check_time = check_time.replace(hour=7, minute=0, second=0, microsecond=0)
+    elif any(w in q for w in ["now", "right now", "currently", "rn", "yet", "still"]):
+        pass  # keep as-is
+    # else: "today", "open today" etc. -> keep as-is (default "now" check)
+
+    if target_weekday is not None:
+        days_ahead = (target_weekday - check_time.weekday()) % 7
+        check_time = check_time + timedelta(days=days_ahead)
+
+    return check_time
+
+
+def is_open_for_query(hours_str: str, query: str, base_time: datetime = None) -> bool | None:
+    """
+    Convenience wrapper: resolve the right check_time from the query phrasing,
+    then check open status at that time.
+    """
+    check_time = resolve_check_time(query, base_time)
+    return is_open_now(hours_str, check_time)
 
 
 def filter_open_now(df, hours_col: str = "opening_hours", check_time: datetime = None):

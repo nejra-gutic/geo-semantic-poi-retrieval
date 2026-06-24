@@ -143,6 +143,12 @@ st.markdown("""
         color: #6b7280;
         margin-top: 0.3rem;
     }
+
+    .hours-note {
+        font-size: 0.75rem;
+        color: #6b7280;
+        margin-top: 0.3rem;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -162,6 +168,12 @@ MARKER_COLORS = {
     "pharmacy": "green", "hospital": "green", "dentist": "green",
     "veterinary": "purple", "bank": "orange", "atm": "orange",
     "parking": "gray", "books": "darkblue", "clothes": "pink",
+}
+
+OPEN_STATUS = {
+    True: ("🟢", "Open now", "#10b981"),
+    False: ("🔴", "Closed", "#ef4444"),
+    None: ("⚪", "Hours unknown", "#6b7280"),
 }
 
 
@@ -196,6 +208,13 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
     from src.retrieval.embeddings import search_embeddings
     from src.retrieval.geo import combine_with_geo, haversine_distance
     from src.retrieval.query import search
+    from src.retrieval.hours import is_open_now
+
+    is_hours_query = any(w in query.lower() for w in [
+        "open now", "open right now", "still open", "open today",
+        "open this", "open late", "open early", "open after",
+        "currently open", "open at", "open until",
+    ])
 
     if method == "TF-IDF":
         results = search(
@@ -205,10 +224,17 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
             top_k=10,
+            user_lat=user_lat,
+            user_lon=user_lon,
         )
 
     elif method == "Embeddings":
-        results = search_embeddings(query, embedding_model, poi_embeddings, df, top_k=10)
+        pool_size = 100 if is_hours_query else 10
+        results = search_embeddings(query, embedding_model, poi_embeddings, df, top_k=pool_size)
+        if is_hours_query and "opening_hours" in results.columns:
+            from src.retrieval.query import apply_open_now_filter
+            results = apply_open_now_filter(results, query=query, boost_pct=0.2, score_col="embedding_score")
+        results = results.head(10)
 
     elif method == "Hybrid":
         bm25_results = search_bm25(query, bm25, df, top_k=200)
@@ -242,7 +268,9 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             hybrid["emb_norm"] = 0
 
         hybrid["hybrid_score"] = 0.2 * hybrid["bm25_norm"] + 0.8 * hybrid["emb_norm"]
-        top = hybrid.sort_values("hybrid_score", ascending=False).head(10)
+        # Pull a larger candidate pool when filtering by hours, since some will be dropped
+        pool_size = 100 if is_hours_query else 10
+        top = hybrid.sort_values("hybrid_score", ascending=False).head(pool_size)
 
         results = df.loc[df.index.isin(top["poi_id"])].copy()
         results = results.merge(top[["poi_id", "hybrid_score"]], left_index=True, right_on="poi_id", how="left")
@@ -250,6 +278,13 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
         near_me = any(w in query.lower() for w in ["near me", "nearby", "close by"])
         if near_me and "latitude" in results.columns and "longitude" in results.columns:
             results = combine_with_geo(results, user_lat, user_lon, score_col="hybrid_score")
+
+        if is_hours_query and "opening_hours" in results.columns:
+            from src.retrieval.query import apply_open_now_filter
+            sort_col = "combined_score" if "combined_score" in results.columns else "hybrid_score"
+            results = apply_open_now_filter(results, query=query, boost_pct=0.2, score_col=sort_col)
+
+        results = results.head(10)
 
     else:
         return pd.DataFrame()
@@ -261,6 +296,13 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             lambda r: round(haversine_distance(user_lat, user_lon, r["latitude"], r["longitude"]), 2)
             if pd.notna(r.get("latitude")) and pd.notna(r.get("longitude")) else None,
             axis=1,
+        )
+
+    # Add is_open_now status for Hybrid/Embeddings too (TF-IDF already has it via search())
+    if not results.empty and "opening_hours" in results.columns and "is_open_now" not in results.columns:
+        results = results.copy()
+        results["is_open_now"] = results["opening_hours"].apply(
+            lambda h: is_open_now(h) if pd.notna(h) else None
         )
 
     return results
@@ -283,7 +325,7 @@ col1, col2 = st.columns([4, 1])
 with col1:
     query = st.text_input(
         "WHAT ARE YOU LOOKING FOR?",
-        placeholder="e.g.  coffee near me  ·  vet for my dog  ·  wheelchair accessible cafe",
+        placeholder="e.g.  coffee near me  ·  is the pharmacy open right now  ·  wheelchair accessible cafe",
     )
 with col2:
     method = st.selectbox("METHOD", ["Hybrid", "Embeddings", "TF-IDF"])
@@ -317,6 +359,14 @@ if query:
             <span class="method-tag">{method}</span>
         </div>
         """, unsafe_allow_html=True)
+
+        has_hours_status = "is_open_now" in results.columns
+
+        if has_hours_status:
+            st.markdown(
+                '<p class="hours-note">🟢 Open now · 🔴 Closed · ⚪ Hours unknown (only confirmed-closed places are filtered out)</p>',
+                unsafe_allow_html=True,
+            )
 
         # Map
         valid_results = results[results["latitude"].notna() & results["longitude"].notna()]
@@ -358,6 +408,12 @@ if query:
             if distance is not None and pd.notna(distance):
                 dist_text = f"<br><span style='color:#fbbf24;font-size:11px'>📏 {distance} km away</span>"
 
+            hours_text = ""
+            if has_hours_status:
+                status_val = row.get("is_open_now")
+                emoji, label, color = OPEN_STATUS.get(status_val, OPEN_STATUS[None])
+                hours_text = f"<br><span style='color:{color};font-size:11px'>{emoji} {label}</span>"
+
             addr_text = f"<br><span style='color:#9ca3af;font-size:11px'>{address}</span>" if address and address != "None" else ""
 
             popup_html = f"""
@@ -366,6 +422,7 @@ if query:
                 <br><span style='color:#6b7280;font-size:11px;text-transform:uppercase'>{category}</span>
                 {addr_text}
                 {dist_text}
+                {hours_text}
                 {score_text}
             </div>
             """
@@ -382,7 +439,15 @@ if query:
         # Results table
         st.subheader(f"Top {len(results)} results")
 
+        if has_hours_status:
+            results = results.copy()
+            results["Hours"] = results["is_open_now"].apply(
+                lambda v: OPEN_STATUS.get(v, OPEN_STATUS[None])[0] + " " + OPEN_STATUS.get(v, OPEN_STATUS[None])[1]
+            )
+
         display_cols = ["name", "category_final", "addr:street", "distance_km"]
+        if has_hours_status:
+            display_cols.append("Hours")
         if score_col:
             display_cols.append(score_col)
             results = results.sort_values(score_col, ascending=False)
@@ -418,6 +483,6 @@ else:
     st_folium(m, width=None, height=480, returned_objects=[])
     st.markdown("""
     <div style='text-align:center;color:#4b5563;padding:1rem 0;font-size:0.875rem'>
-        Try: <code>coffee near me</code> · <code>vet for my dog</code> · <code>wheelchair accessible cafe</code> · <code>bookshop nearby</code>
+        Try: <code>coffee near me</code> · <code>is the pharmacy open right now</code> · <code>wheelchair accessible cafe</code> · <code>bookshop nearby</code>
     </div>
     """, unsafe_allow_html=True)

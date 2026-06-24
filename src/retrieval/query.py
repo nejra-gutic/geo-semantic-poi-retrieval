@@ -20,7 +20,7 @@ from src.retrieval.normalize import normalize
 from src.retrieval.intent_classifier import predict
 from src.preprocessing.normalize import normalize_text as preprocess_text
 from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER
-from src.retrieval.hours import is_open_now
+from src.retrieval.hours import is_open_now, is_open_for_query
 
 
 QUERY_SYNONYMS = {
@@ -162,15 +162,24 @@ def detect_specific_category(query: str):
     return None
 
 
-def apply_open_now_filter(results: pd.DataFrame, check_time: datetime = None, boost: float = 0.5) -> pd.DataFrame:
+def apply_open_now_filter(results: pd.DataFrame, query: str = "", check_time: datetime = None, boost_pct: float = 0.2, score_col: str = "similarity_score") -> pd.DataFrame:
     """
     Annotate results with 'is_open_now' (True/False/None) and drop only
     POIs CONFIRMED closed. POIs with unknown hours are kept (flagged), since
     we don't want to penalize missing OSM data.
 
+    Uses query phrasing to decide WHEN to check (e.g. "open late tonight"
+    checks ~22:00, not right now) via is_open_for_query(). If check_time is
+    explicitly provided, it overrides this resolution.
+
     Confirmed-open POIs get a score boost so they rank above unknown-hours
     POIs with similar text relevance (otherwise "open now" has no effect
-    on ranking, only on filtering).
+    on ranking, only on filtering). The boost is RELATIVE: boost_pct * max
+    score in the pool, so the effect is consistent across TF-IDF/Embeddings/
+    Hybrid even though their raw score ranges differ. score_col specifies
+    which column to boost (defaults to 'similarity_score'; callers using
+    embeddings/hybrid scores should pass 'embedding_score' / 'hybrid_score'
+    / 'combined_score' as appropriate).
     """
     if "opening_hours" not in results.columns or results.empty:
         results = results.copy()
@@ -178,19 +187,27 @@ def apply_open_now_filter(results: pd.DataFrame, check_time: datetime = None, bo
         return results
 
     results = results.copy()
-    results["is_open_now"] = results["opening_hours"].apply(
-        lambda h: is_open_now(h, check_time) if pd.notna(h) else None
-    )
+
+    if query:
+        results["is_open_now"] = results["opening_hours"].apply(
+            lambda h: is_open_for_query(h, query, check_time) if pd.notna(h) else None
+        )
+    else:
+        results["is_open_now"] = results["opening_hours"].apply(
+            lambda h: is_open_now(h, check_time) if pd.notna(h) else None
+        )
 
     before = len(results)
     results = results[results["is_open_now"] != False]
     print(f"[query] open_now filter: {before} → {len(results)} (dropped confirmed-closed only)")
 
-    if "similarity_score" in results.columns:
-        results["similarity_score"] = results["similarity_score"] + results["is_open_now"].apply(
-            lambda v: boost if v is True else 0.0
+    if score_col in results.columns and not results.empty:
+        max_score = results[score_col].max()
+        boost_amount = max_score * boost_pct if pd.notna(max_score) else 0.0
+        results[score_col] = results[score_col] + results["is_open_now"].apply(
+            lambda v: boost_amount if v is True else 0.0
         )
-        results = results.sort_values("similarity_score", ascending=False)
+        results = results.sort_values(score_col, ascending=False)
 
     return results
 
@@ -290,7 +307,7 @@ def search(
 
     # Apply open_now filter (requires parsing opening_hours per row)
     if filters.get("open_now"):
-        results = apply_open_now_filter(results, check_time=check_time)
+        results = apply_open_now_filter(results, query=query, check_time=check_time, score_col="similarity_score")
 
     # Keep only relevant columns
     existing_cols = [col for col in RESULT_COLS if col in results.columns]
