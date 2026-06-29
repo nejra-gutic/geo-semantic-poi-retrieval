@@ -50,11 +50,7 @@ def main():
             ),
             crs="EPSG:4326",
         )
-        time_cols = [f"{d}_{t}" for d in ["mo","tu","we","th","fr","sa","su"] for t in ["open","close"]]
-        for col in time_cols:
-            if col in gdf.columns:
-                gdf[col] = gdf[col].where(gdf[col].notna(), other=None).astype(str)
-                gdf[col] = gdf[col].replace("nan", None)
+        
         save_geojson(gdf, args.output + ".geojson")
     else:
         print("[main] Warning - no lat/lon columns, skipping GeoJSON output")

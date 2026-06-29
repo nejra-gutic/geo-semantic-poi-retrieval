@@ -210,7 +210,10 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
     from src.retrieval.query import search
     from src.retrieval.hours import is_open_now
 
-    is_hours_query = any(w in query.lower() for w in [
+    q = query.lower()
+    q = q.replace("opened", "open")
+
+    is_hours_query = any(w in q for w in [
         "open now", "open right now", "still open", "open today",
         "open this", "open late", "open early", "open after",
         "currently open", "open at", "open until",
@@ -268,14 +271,14 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             hybrid["emb_norm"] = 0
 
         hybrid["hybrid_score"] = 0.2 * hybrid["bm25_norm"] + 0.8 * hybrid["emb_norm"]
-        # Pull a larger candidate pool when filtering by hours, since some will be dropped
-        pool_size = 100 if is_hours_query else 10
+        near_me = any(w in q for w in ["near me", "nearby", "close by"])
+
+        pool_size = 100 if (is_hours_query or near_me) else 10
         top = hybrid.sort_values("hybrid_score", ascending=False).head(pool_size)
 
         results = df.loc[df.index.isin(top["poi_id"])].copy()
         results = results.merge(top[["poi_id", "hybrid_score"]], left_index=True, right_on="poi_id", how="left")
 
-        near_me = any(w in query.lower() for w in ["near me", "nearby", "close by"])
         if near_me and "latitude" in results.columns and "longitude" in results.columns:
             results = combine_with_geo(results, user_lat, user_lon, score_col="hybrid_score")
 
