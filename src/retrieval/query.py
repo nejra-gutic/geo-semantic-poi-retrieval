@@ -46,17 +46,21 @@ QUERY_SYNONYMS = {
 }
 
 INTENT_TO_CATEGORY = {
-    "find_cafe":      ["cafe", "coffee", "bakery"],
-    "find_food":      ["restaurant", "fast_food"],
+    "find_cafe":      ["cafe", "coffee", "bakery", "bar", "pub"],
+    "find_food":      ["restaurant", "fast_food", "food_court", "ice_cream", "deli"],
     "find_service":   ["pharmacy", "doctors", "bank", "hospital", "atm", "clinic",
-                       "dentist", "veterinary", "optician"],
+                       "dentist", "veterinary", "optician", "post_office",
+                       "post_depot", "library", "school", "fire_station",
+                       "police", "funeral_directors"],
     "find_shop":      ["convenience", "clothes", "supermarket", "furniture", "gift",
                        "hairdresser", "car_repair", "pet", "books", "electronics",
-                       "bicycle", "second_hand", "variety_store", "pet_grooming"],
+                       "bicycle", "second_hand", "variety_store", "pet_grooming",
+                       "hardware", "florist", "jewelry", "shoes", "toys", "sports",
+                       "department_store", "mobile_phone", "hotel"],
     "find_transport": [
         "parking", "parking_space", "parking_entrance", "bicycle_parking",
         "bicycle_rental", "charging_station", "fuel", "car_wash",
-        "motorcycle_parking", "car_rental", "taxi"
+        "motorcycle_parking", "car_rental", "taxi", "bus_station"
     ],
 }
 
@@ -270,6 +274,12 @@ def detect_specific_category(query: str):
     if "library" in q:
         return ["library"]
 
+    if "hotel" in q or "lodging" in q or "motel" in q or "hostel" in q:
+        return ["hotel"]
+
+    if "school" in q or "university" in q or "college" in q or "campus" in q:
+        return ["school", "university", "college"]
+
     return None
 
 
@@ -319,11 +329,9 @@ def apply_open_now_filter(results: pd.DataFrame, query: str = "", check_time: da
         adjustment = max_score * boost_pct if pd.notna(max_score) else 0.0
 
         def _score_adjustment(v):
-            if v is True:
-                return adjustment
-            if v is False:
-                return -adjustment
-            return 0.0  # unknown -> no change
+            if pd.isna(v):
+                return 0.0
+            return adjustment if v else -adjustment
 
         results[score_col] = results[score_col] + results["is_open_now"].apply(_score_adjustment)
         results = results.sort_values(score_col, ascending=False)

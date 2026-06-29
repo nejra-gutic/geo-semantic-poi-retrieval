@@ -11,8 +11,7 @@ import numpy as np
 import pandas as pd
 
 from sentence_transformers import SentenceTransformer
-from src.retrieval.normalize import normalize
-from src.preprocessing.normalize import normalize_text as preprocess_text
+from src.retrieval.query import expand_query_synonyms, extract_temporal_phrase
 
 
 MODEL_NAME = "all-MiniLM-L6-v2"
@@ -107,8 +106,10 @@ def search_embeddings(
             search_df["poi_id"] = search_df.index
         search_df = search_df.reset_index(drop=True)
 
+    query_clean = extract_temporal_phrase(expand_query_synonyms(query))
+
     query_embedding = model.encode(
-        [query],
+        [query_clean],
         convert_to_numpy=True,
         normalize_embeddings=True,
     )

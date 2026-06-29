@@ -9,7 +9,7 @@ Steps:
   2. address      - addr:street cleanup
   3. flags        - wheelchair_accessible, has_takeaway binary flags
   4. cuisine      - cuisine normalization and mapping
-  5. opening_hours - parse OSM opening_hours into per-day columns + is_24_7
+  5. opening_hours - keep raw opening_hours, fix invalid values, add is_24_7
   6. normalize    - unidecode + lowercase for text columns
   7. text_join    - build poi_text field for NLP
   8. geometry     - validate/preserve geometry column

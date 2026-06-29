@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 from rank_bm25 import BM25Okapi
 from src.retrieval.normalize import normalize
+from src.retrieval.query import expand_query_synonyms, extract_temporal_phrase
 
 
 BM25_STOPWORDS = {
@@ -35,11 +36,14 @@ def _tokenize_text(text: str) -> list[str]:
 
 
 def _tokenize_query(query: str) -> list[str]:
-    normalized = normalize(query) or query.lower()
+    query_clean = extract_temporal_phrase(expand_query_synonyms(query))
+    normalized = normalize(query_clean) or query_clean.lower()
+
     tokens = [
         t for t in normalized.split()
         if len(t) > 1 and t not in BM25_STOPWORDS
     ]
+
     return _make_ngrams(tokens)
 
 
