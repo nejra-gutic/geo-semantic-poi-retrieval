@@ -1,331 +1,317 @@
-query,intent
-"coffee near me",find_cafe
-"coffee shop downtown",find_cafe
-"cafe near division street",find_cafe
-"best espresso in town",find_cafe
-"cappuccino nearby",find_cafe
-"latte place downtown",find_cafe
-"tea house close by",find_cafe
-"coffee and pastry spot",find_cafe
-"breakfast cafe near me",find_cafe
-"cozy cafe downtown",find_cafe
-
-"mexican restaurant",find_food
-"pizza place near me",find_food
-"italian takeaway food",find_food
-"sushi restaurant nearby",find_food
-"burger place downtown",find_food
-"thai restaurant close by",find_food
-"chinese food near me",find_food
-"indian restaurant downtown",find_food
-"vegan food nearby",find_food
-"bbq restaurant close by",find_food
-
-"pharmacy near me",find_service
-"nearest hospital",find_service
-"atm close by",find_service
-"bank downtown",find_service
-"dentist near me",find_service
-"doctor nearby",find_service
-"urgent care clinic",find_service
-"post office close by",find_service
-"veterinarian nearby",find_service
-"laundromat near me",find_service
-
-"grocery store near me",find_shop
-"clothing store downtown",find_shop
-"bookstore nearby",find_shop
-"hardware store close by",find_shop
-"shoe store near me",find_shop
-"electronics store downtown",find_shop
-"furniture shop nearby",find_shop
-"pet store close by",find_shop
-"supermarket near me",find_shop
-"gift shop downtown",find_shop
-
-"wheelchair accessible cafe",accessibility
-"accessible restaurant near me",accessibility
-"wheelchair friendly pharmacy",accessibility
-"disability friendly cafe",accessibility
-"accessible bar nearby",accessibility
-"restaurant with accessible entrance",accessibility
-"disabled access cafe",accessibility
-"accessible shop near me",accessibility
-"wheelchair friendly dentist",accessibility
-"pharmacy with disabled access",accessibility
-
-"pharmacy open now",hours_based
-"restaurant open late",hours_based
-"which cafes are open now",hours_based
-"cafe open early morning",hours_based
-"bar open late night",hours_based
-"24 hour grocery store",hours_based
-"restaurant open on sunday",hours_based
-"late night food near me",hours_based
-"early breakfast cafe open",hours_based
-"store open 24/7",hours_based
-
-"parking near downtown",find_transport
-"bus stop near me",find_transport
-"bicycle parking nearby",find_transport
-"car park close by",find_transport
-"parking garage downtown",find_transport
-"bike rack near me",find_transport
-"taxi nearby",find_transport
-"parking lot close by",find_transport
-"motorcycle parking near me",find_transport
-"public transport stop nearby",find_transport
-
-"bank near me",find_service
-"nearest bank",find_service
-"bank close by",find_service
-"atm near me",find_service
-"nearest atm",find_service
-"cash machine near me",find_service
-"hospital near me",find_service
-"clinic near me",find_service
-
-"pizza near me",find_food
-"pizza restaurant near me",find_food
-"pizza place downtown",find_food
-"burger near me",find_food
-"restaurant near me",find_food
-"food place near me",find_food
-
-"bus stop nearby",find_transport
-"nearest bus stop",find_transport
-"bus station near me",find_transport
-"public transport near me",find_transport
-"train station nearby",find_transport
-"tram stop near me",find_transport
-
-"where can i grab a coffee",find_cafe
-"place to sit and work with laptop",find_cafe
-"i need my morning fix",find_cafe
-"somewhere to read and drink tea",find_cafe
-"good espresso place",find_cafe
-"quiet cafe to study",find_cafe
-"hipster coffee place",find_cafe
-"cafe with good wifi",find_cafe
-"brunch spot downtown",find_cafe
-"flat white near me",find_cafe
-"cortado coffee shop",find_cafe
-"pour over coffee portland",find_cafe
-"coffee and bagel place",find_cafe
-"late night coffee spot",find_cafe
-"outdoor seating cafe",find_cafe
-"cofee shop near me",find_cafe
-"caffee nearby",find_cafe
-"capuccino place downtown",find_cafe
-"coffe to go",find_cafe
-"expresso bar near me",find_cafe
-"need food asap",find_food
-"hungry where to eat",find_food
-"good lunch spot",find_food
-"dinner place for two",find_food
-"cheap eats downtown",find_food
-"late night food",find_food
-"best ramen in portland",find_food
-"place for a quick bite",find_food
-"something spicy to eat",find_food
-"comfort food near me",find_food
-"street food nearby",find_food
-"healthy food options",find_food
-"where to get sushi",find_food
-"kebab place near me",find_food
-"fish and chips nearby",find_food
-"resturant near me",find_food
-"restarant downtown",find_food
-"food places close by",find_food
-"somwhere to eat lunch",find_food
-"burrito place near me",find_food
-"need to pick up medicine",find_service
-"where can i find a doctor",find_service
-"emergency dental care",find_service
-"need stitches where to go",find_service
-"closest urgent care",find_service
-"find me a vet for my dog",find_service
-"where to send a package",find_service
-"need to withdraw cash",find_service
-"open a bank account nearby",find_service
-"eye doctor near me",find_service
-"blood test lab nearby",find_service
-"mental health clinic",find_service
-"physio near me",find_service
-"chiropractor downtown",find_service
-"where to get vaccinated",find_service
-"phramacy near me",find_service
-"hosptal nearby",find_service
-"dentit close by",find_service
-"docter near me",find_service
-"clinci near downtown",find_service
-"looking for a new outfit",find_shop
-"where to buy groceries",find_shop
-"need a new phone charger",find_shop
-"bookshop nearby",find_shop
-"where to buy flowers",find_shop
-"pet supplies store",find_shop
-"sports equipment shop",find_shop
-"craft supply store nearby",find_shop
-"where to buy tools",find_shop
-"vintage clothing store",find_shop
-"thrift shop near me",find_shop
-"organic food store",find_shop
-"toy store nearby",find_shop
-"art supply shop",find_shop
-"where to buy a gift",find_shop
-"groccery store near me",find_shop
-"clothng store downtown",find_shop
-"supermarkt nearby",find_shop
-"shoe shop close by",find_shop
-"furnitur store near me",find_shop
-"need to park my car",find_transport
-"where can i lock my bike",find_transport
-"ev charging point nearby",find_transport
-"car wash near me",find_transport
-"rent a bicycle",find_transport
-"fuel station nearby",find_transport
-"car service garage",find_transport
-"where to park downtown",find_transport
-"motorbike parking",find_transport
-"bike repair shop",find_transport
-"place to charge my electric car",find_transport
-"car parts store nearby",find_transport
-"where can i rent a car",find_transport
-"taxi stand near me",find_transport
-"vehicle inspection center",find_transport
-"parkng near me",find_transport
-"bycicle parking nearby",find_transport
-"car park close",find_transport
-"petrol station near me",find_transport
-"motercycle parking downtown",find_transport
-"restaurant i can get into with wheelchair",accessibility
-"accessible toilet nearby",accessibility
-"disabled parking near entrance",accessibility
-"wheelchair ramp restaurant",accessibility
-"easy access pharmacy",accessibility
-"mobility friendly cafe",accessibility
-"accessible entrance bar",accessibility
-"disabled friendly dentist",accessibility
-"wheelchair user friendly shop",accessibility
-"can i bring my wheelchair here",accessibility
-"accessible route to restaurant",accessibility
-"disabled access hospital",accessibility
-"wheelchair friendly grocery store",accessibility
-"place for someone in wheelchair",accessibility
-"accessible coffee shop",accessibility
-"whelchair accessible cafe",accessibility
-"dissabled friendly restaurant",accessibility
-"acesible pharmacy nearby",accessibility
-"handicap accessible bar",accessibility
-"wheelchair freindly cafe downtown",accessibility
-"what places are open right now",hours_based
-"open on bank holiday",hours_based
-"places open past midnight",hours_based
-"breakfast places open at 7am",hours_based
-"late night pharmacy",hours_based
-"sunday brunch spot",hours_based
-"24 hour supermarket",hours_based
-"coffee before 8am",hours_based
-"where can i eat at 11pm",hours_based
-"open now restaurant",hours_based
-"early morning gym nearby",hours_based
-"place open all night",hours_based
-"shops open on sunday",hours_based
-"bar open till 2am",hours_based
-"cafe open at 6am",hours_based
-"whats open near me now",hours_based
-"resturant open late night",hours_based
-"24hr phramacy",hours_based
-"open sundy morning cafe",hours_based
-"late nite food place",hours_based
-
-"specialty coffee roaster",find_cafe
-"artisan coffee nearby",find_cafe
-"coffeehouse downtown",find_cafe
-"best latte in town",find_cafe
-"cafe for remote work",find_cafe
-"study cafe nearby",find_cafe
-"espresso and croissant",find_cafe
-"small local coffee shop",find_cafe
-"coffee place with wifi",find_cafe
-"grab a quick coffee",find_cafe
-
-"eatery near me",find_food
-"family restaurant nearby",find_food
-"where can i have dinner",find_food
-"good place for lunch",find_food
-"restaurant for takeaway",find_food
-"quick meal downtown",find_food
-"local food spot",find_food
-"seafood restaurant nearby",find_food
-"asian food near me",find_food
-"best burgers downtown",find_food
-
-"emergency room nearby",find_service
-"medical center close by",find_service
-"healthcare clinic nearby",find_service
-"banking branch downtown",find_service
-"financial services near me",find_service
-"cash withdrawal point",find_service
-"family doctor nearby",find_service
-"laboratory for blood tests",find_service
-"vaccination center nearby",find_service
-"medical help near me",find_service
-
-"retail store downtown",find_shop
-"mall nearby",find_shop
-"shopping center close by",find_shop
-"buy electronics near me",find_shop
-"home decor store",find_shop
-"stationery shop nearby",find_shop
-"computer store downtown",find_shop
-"mobile phone shop",find_shop
-"beauty products store",find_shop
-"local market nearby",find_shop
-
-"step free entrance cafe",accessibility
-"barrier free restaurant",accessibility
-"mobility access pharmacy",accessibility
-"restaurant without stairs",accessibility
-"step free coffee shop",accessibility
-"accessible medical center",accessibility
-"easy wheelchair access",accessibility
-"mobility scooter friendly store",accessibility
-"barrier free cafe nearby",accessibility
-"accessible entrance grocery store",accessibility
-
-"open after midnight",hours_based
-"currently open nearby",hours_based
-"open this evening",hours_based
-"open until 10pm",hours_based
-"open at noon",hours_based
-"which places are open",hours_based
-"open all weekend",hours_based
-"open before work",hours_based
-"open on saturday morning",hours_based
-"still open now",hours_based
-
-"park and ride nearby",find_transport
-"charging station for electric cars",find_transport
-"public transit station",find_transport
-"metro station nearby",find_transport
-"light rail stop nearby",find_transport
-"bus terminal downtown",find_transport
-"commuter train station",find_transport
-"electric vehicle charger",find_transport
-"bicycle rental station",find_transport
-"parking structure nearby",find_transport
-
-"place for a haircut",find_shop
-"haircut near me",find_shop
-"barber shop nearby",find_shop
-"hair salon downtown",find_shop
-"where to get a haircut",find_shop
-"need a haircut",find_shop
-"barber near me",find_shop
-"hair stylist nearby",find_shop
-"trim my hair",find_shop
-"men's haircut near me",find_shop
-
-
+"query","intent"
+"coffee close by","find_cafe"
+"downtown coffee place","find_cafe"
+"cafe near division street","find_cafe"
+"best espresso in town","find_cafe"
+"cappuccino nearby","find_cafe"
+"latte place downtown","find_cafe"
+"tea house close by","find_cafe"
+"coffee and pastry spot","find_cafe"
+"breakfast cafe near me","find_cafe"
+"cozy cafe downtown","find_cafe"
+"mexican restaurant","find_food"
+"pizza place near me","find_food"
+"italian takeaway food","find_food"
+"sushi restaurant nearby","find_food"
+"burger place downtown","find_food"
+"thai restaurant close by","find_food"
+"chinese food near me","find_food"
+"indian restaurant downtown","find_food"
+"vegan food nearby","find_food"
+"bbq restaurant close by","find_food"
+"nearest pharmacy","find_service"
+"nearest hospital","find_service"
+"atm close by","find_service"
+"bank downtown","find_service"
+"nearest dental clinic","find_service"
+"doctor nearby","find_service"
+"urgent care clinic","find_service"
+"post office close by","find_service"
+"veterinarian nearby","find_service"
+"laundromat near me","find_service"
+"grocery store near me","find_shop"
+"clothing store downtown","find_shop"
+"book shop close by","find_shop"
+"hardware store close by","find_shop"
+"shoe store near me","find_shop"
+"tech shop in downtown","find_shop"
+"furniture shop nearby","find_shop"
+"pet store close by","find_shop"
+"supermarket near me","find_shop"
+"gift shop downtown","find_shop"
+"accessible restaurant near me","find_food"
+"disability friendly cafe","find_cafe"
+"accessible bar nearby","find_cafe"
+"restaurant with accessible entrance","find_food"
+"disabled access cafe","find_cafe"
+"accessible shop near me","find_shop"
+"wheelchair friendly dentist","find_service"
+"pharmacy with disabled access","find_service"
+"drugstore close by","find_service"
+"restaurant downtown","find_food"
+"cafes downtown","find_cafe"
+"morning cafe spot","find_cafe"
+"bar nearby","find_cafe"
+"grocery store","find_shop"
+"sunday restaurant","find_food"
+"late night food spot","find_food"
+"breakfast cafe","find_cafe"
+"supermarket nearby","find_shop"
+"parking near downtown","find_transport"
+"bus stop near me","find_transport"
+"bicycle parking nearby","find_transport"
+"car park close by","find_transport"
+"downtown parking structure","find_transport"
+"bike rack near me","find_transport"
+"taxi nearby","find_transport"
+"parking lot close by","find_transport"
+"motorcycle parking near me","find_transport"
+"public transport stop nearby","find_transport"
+"nearest bank branch","find_service"
+"nearest bank","find_service"
+"bank close by","find_service"
+"cash machine nearby","find_service"
+"nearest atm","find_service"
+"cash machine near me","find_service"
+"hospital near me","find_service"
+"clinic near me","find_service"
+"pizza place nearby","find_food"
+"pizza restaurant near me","find_food"
+"pizza place downtown","find_food"
+"burger near me","find_food"
+"places to eat nearby","find_food"
+"food place near me","find_food"
+"bus stop nearby","find_transport"
+"nearest bus stop","find_transport"
+"bus station near me","find_transport"
+"public transport near me","find_transport"
+"train station nearby","find_transport"
+"tram stop near me","find_transport"
+"where can i grab a coffee","find_cafe"
+"place to sit and work with laptop","find_cafe"
+"i need my morning fix","find_cafe"
+"somewhere to read and drink tea","find_cafe"
+"good espresso place","find_cafe"
+"quiet cafe to study","find_cafe"
+"hipster coffee place","find_cafe"
+"cafe with good wifi","find_cafe"
+"brunch spot downtown","find_cafe"
+"flat white near me","find_cafe"
+"cortado coffee shop","find_cafe"
+"pour over coffee portland","find_cafe"
+"coffee and bagel place","find_cafe"
+"late night coffee spot","find_cafe"
+"outdoor seating cafe","find_cafe"
+"cofee shop near me","find_cafe"
+"caffee nearby","find_cafe"
+"capuccino place downtown","find_cafe"
+"coffe to go","find_cafe"
+"expresso bar near me","find_cafe"
+"need food asap","find_food"
+"hungry where to eat","find_food"
+"good lunch spot","find_food"
+"dinner place for two","find_food"
+"cheap eats downtown","find_food"
+"late night food","find_food"
+"best ramen in portland","find_food"
+"place for a quick bite","find_food"
+"something spicy to eat","find_food"
+"comfort food near me","find_food"
+"street food nearby","find_food"
+"healthy food options","find_food"
+"where to get sushi","find_food"
+"kebab place near me","find_food"
+"fish and chips nearby","find_food"
+"resturant near me","find_food"
+"restarant downtown","find_food"
+"food places close by","find_food"
+"somwhere to eat lunch","find_food"
+"burrito place near me","find_food"
+"need to pick up medicine","find_service"
+"where can i find a doctor","find_service"
+"emergency dental care","find_service"
+"need stitches where to go","find_service"
+"closest urgent care","find_service"
+"find me a vet for my dog","find_service"
+"where to send a package","find_service"
+"need to withdraw cash","find_service"
+"open a bank account nearby","find_service"
+"nearest optometrist","find_service"
+"blood test lab nearby","find_service"
+"mental health clinic","find_service"
+"physio near me","find_service"
+"chiropractor downtown","find_service"
+"where to get vaccinated","find_service"
+"phramacy near me","find_service"
+"hosptal nearby","find_service"
+"dentit close by","find_service"
+"docter near me","find_service"
+"clinci near downtown","find_service"
+"looking for a new outfit","find_shop"
+"where to buy groceries","find_shop"
+"need a new phone charger","find_shop"
+"bookstore close by","find_shop"
+"where to buy flowers","find_shop"
+"pet supplies store","find_shop"
+"sports equipment shop","find_shop"
+"craft supply store nearby","find_shop"
+"where to buy tools","find_shop"
+"retro clothes shop","find_shop"
+"thrift shop near me","find_shop"
+"organic food store","find_shop"
+"toy store nearby","find_shop"
+"art supply shop","find_shop"
+"where to buy a gift","find_shop"
+"groccery store near me","find_shop"
+"clothng store downtown","find_shop"
+"supermarkt nearby","find_shop"
+"shoe shop close by","find_shop"
+"furnitur store near me","find_shop"
+"need to park my car","find_transport"
+"where can i lock my bike","find_transport"
+"ev charging point nearby","find_transport"
+"closest car wash","find_transport"
+"rent a bicycle","find_transport"
+"fuel station nearby","find_transport"
+"car service garage","find_transport"
+"where to park downtown","find_transport"
+"motorbike parking","find_transport"
+"bicycle repair nearby","find_transport"
+"place to charge my electric car","find_transport"
+"car parts store nearby","find_transport"
+"where can i rent a car","find_transport"
+"taxi stand near me","find_transport"
+"vehicle inspection center","find_transport"
+"parkng near me","find_transport"
+"bycicle parking nearby","find_transport"
+"car park close","find_transport"
+"petrol station near me","find_transport"
+"motercycle parking downtown","find_transport"
+"restaurant i can get into with wheelchair","find_food"
+"disabled parking near entrance","find_transport"
+"wheelchair ramp restaurant","find_food"
+"easy access pharmacy","find_service"
+"mobility friendly cafe","find_cafe"
+"accessible entrance bar","find_cafe"
+"disabled friendly dentist","find_service"
+"accessible route to restaurant","find_food"
+"hospital with wheelchair access","find_service"
+"wheelchair friendly grocery store","find_shop"
+"accessible coffee shop","find_cafe"
+"cafe with wheelchair access","find_cafe"
+"dissabled friendly restaurant","find_food"
+"acesible pharmacy nearby","find_service"
+"handicap accessible bar","find_cafe"
+"wheelchair freindly cafe downtown","find_cafe"
+"pharmacy","find_service"
+"bank holiday hours","find_service"
+"midnight food spot","find_food"
+"breakfast place","find_cafe"
+"pharmacy nearby spot","find_service"
+"sunday brunch spot","find_cafe"
+"big supermarket","find_shop"
+"morning coffee place","find_cafe"
+"late dinner place","find_food"
+"restaurant for dinner","find_food"
+"early gym nearby","find_shop"
+"food place all night","find_food"
+"sunday shop","find_shop"
+"bar nearby spot","find_cafe"
+"cafe spot","find_cafe"
+"near me shop","find_shop"
+"resturant late spot","find_food"
+"phramacy spot","find_service"
+"sundy morning cafe","find_cafe"
+"nite food place","find_food"
+"specialty coffee roaster","find_cafe"
+"artisan coffee nearby","find_cafe"
+"coffeehouse downtown","find_cafe"
+"best latte in town","find_cafe"
+"cafe for remote work","find_cafe"
+"study cafe nearby","find_cafe"
+"espresso and croissant","find_cafe"
+"small local coffee shop","find_cafe"
+"coffee place with wifi","find_cafe"
+"quick coffee to go","find_cafe"
+"eatery near me","find_food"
+"family restaurant nearby","find_food"
+"where can i have dinner","find_food"
+"good place for lunch","find_food"
+"restaurant for takeaway","find_food"
+"quick meal downtown","find_food"
+"local food spot","find_food"
+"seafood place close by","find_food"
+"asian food near me","find_food"
+"burger place in downtown","find_food"
+"emergency hospital close by","find_service"
+"medical center close by","find_service"
+"healthcare clinic nearby","find_service"
+"banking branch downtown","find_service"
+"financial services near me","find_service"
+"cash withdrawal point","find_service"
+"family doctor nearby","find_service"
+"laboratory for blood tests","find_service"
+"vaccination center nearby","find_service"
+"medical help near me","find_service"
+"retail store downtown","find_shop"
+"mall nearby","find_shop"
+"shopping center close by","find_shop"
+"buy electronics near me","find_shop"
+"home decor store","find_shop"
+"stationery shop nearby","find_shop"
+"computer store downtown","find_shop"
+"mobile phone shop","find_shop"
+"beauty products store","find_shop"
+"neighborhood market close by","find_shop"
+"cafe without stairs","find_cafe"
+"barrier free restaurant","find_food"
+"mobility access pharmacy","find_service"
+"restaurant without stairs","find_food"
+"step free coffee shop","find_cafe"
+"accessible medical center","find_service"
+"mobility scooter friendly store","find_shop"
+"barrier free cafe nearby","find_cafe"
+"grocery store with wheelchair access","find_shop"
+"food spot","find_food"
+"shop spot","find_shop"
+"evening shop","find_shop"
+"shop nearby","find_shop"
+"weekend shop","find_shop"
+"morning cafe","find_cafe"
+"saturday cafe","find_cafe"
+"shop spot nearby","find_shop"
+"park and ride nearby","find_transport"
+"charging station for electric cars","find_transport"
+"public transit station","find_transport"
+"metro station nearby","find_transport"
+"light rail stop nearby","find_transport"
+"bus terminal downtown","find_transport"
+"commuter train station","find_transport"
+"electric vehicle charger","find_transport"
+"bicycle rental station","find_transport"
+"parking structure nearby","find_transport"
+"vaccination clinic nearby","find_service"
+"where can i get vaccinated","find_service"
+"covid testing center nearby","find_service"
+"blood testing center","find_service"
+"haircut place nearby","find_shop"
+"haircut near me","find_shop"
+"barber shop nearby","find_shop"
+"hair salon downtown","find_shop"
+"where to get a haircut","find_shop"
+"need a haircut","find_shop"
+"barber near me","find_shop"
+"hair stylist nearby","find_shop"
+"trim my hair","find_shop"
+"men's haircut near me","find_shop"
+"quick meal near downtown",find_food
+"fish and chips place",find_food
+"where can i eat dinner",find_food
+"ev charger nearby",find_transport
+"electric car charging point",find_transport
+"where can i lock my bicycle",find_transport
+"bike parking close by",find_transport
+"find a veterinarian for my dog",find_service
+"vet clinic nearby",find_service
+"chiropractor near downtown",find_service
+"coffeehouse near me",find_cafe
