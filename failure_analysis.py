@@ -25,7 +25,6 @@ from src.retrieval.query import (
     detect_specific_category,
     has_category_signal,
     INTENT_TO_CATEGORY,
-    CONFIDENCE_THRESHOLD,
 )
 
 CONFIDENCE_THRESHOLD = 40.0

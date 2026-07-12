@@ -351,3 +351,16 @@ cafe open right now,find_cafe
 is that coffee shop open already,find_cafe
 eateries open on christmas,find_food
 which shops stay open this late,find_shop
+
+"noodle shop nearby",find_food
+"sushi shop downtown",find_food
+"dumpling shop near me",find_food
+"taco shop close by",find_food
+"burger shop nearby",find_food
+"kebab shop near me",find_food
+
+"coffee shop on burnside",find_cafe
+"cozy coffee shop downtown",find_cafe
+"coffee shop with wifi",find_cafe
+"nice coffee shop nearby",find_cafe
+"local coffee shop close by",find_cafe
