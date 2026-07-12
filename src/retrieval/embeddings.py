@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 
 from sentence_transformers import SentenceTransformer
+from src.retrieval.normalize import normalize
+from src.preprocessing.normalize import normalize_text as preprocess_text
 from src.retrieval.query import expand_query_synonyms, extract_temporal_phrase
 
 
@@ -25,7 +27,7 @@ def load_embedding_model(model_name: str = MODEL_NAME) -> SentenceTransformer:
 def build_embeddings(
     df: pd.DataFrame,
     model: SentenceTransformer,
-    col: str = "poi_text_lemma",
+    col: str = "poi_text",
     save_path: str = "models/poi_embeddings.npy",
 ) -> np.ndarray:
     if col not in df.columns:
@@ -63,7 +65,7 @@ def load_embeddings(path: str = "models/poi_embeddings.npy") -> np.ndarray:
 def get_or_build_embeddings(
     df: pd.DataFrame,
     model: SentenceTransformer,
-    col: str = "poi_text_lemma",
+    col: str = "poi_text",
     path: str = "models/poi_embeddings.npy",
 ) -> np.ndarray:
     path_obj = Path(path)
@@ -80,55 +82,73 @@ def search_embeddings(
     embeddings: np.ndarray,
     df: pd.DataFrame,
     top_k: int = 10,
-    df_filtered: pd.DataFrame = None,
+    intent_model=None,
+    intent_vectorizer=None,
+    user_lat: float = None,
+    user_lon: float = None,
+    check_time=None,
 ) -> pd.DataFrame:
-    if df_filtered is not None:
-        if df_filtered.empty:
-            print(f"[embeddings] Query: '{query}' → 0 results (empty filter)")
-            return pd.DataFrame(columns=list(df.columns) + ["embedding_score"])
+    from src.retrieval.common import (
+        apply_intent_boost,
+        get_query_core,
+        apply_boolean_filters,
+        apply_temporal_filter,
+        apply_geo_reranking,
+    )
+    from src.retrieval.query import parse_filters, RESULT_COLS
 
-        mask = df.index.get_indexer(df_filtered.index)
-        mask = mask[mask >= 0]
+    # 1. Strip temporal phrases before encoding
+    query_core = get_query_core(query)
+    print(f"[embeddings] Original:   '{query}'")
+    print(f"[embeddings] Core:       '{query_core}'")
 
-        if len(mask) == 0:
-            print(f"[embeddings] Query: '{query}' → 0 results (empty embedding subset)")
-            return pd.DataFrame(columns=list(df.columns) + ["embedding_score"])
-
-        embeddings_subset = embeddings[mask]
-        search_df = df_filtered.copy()
-        if "poi_id" not in search_df.columns:
-            search_df["poi_id"] = search_df.index
-        search_df = search_df.reset_index(drop=True)
-    else:
-        embeddings_subset = embeddings
-        search_df = df.copy()
-        if "poi_id" not in search_df.columns:
-            search_df["poi_id"] = search_df.index
-        search_df = search_df.reset_index(drop=True)
-
-    query_clean = extract_temporal_phrase(expand_query_synonyms(query))
-
+    # 2. Encode query_core (temporal phrases excluded)
     query_embedding = model.encode(
-        [query_clean],
+        [query_core],
         convert_to_numpy=True,
         normalize_embeddings=True,
     )
 
-    # Since both query and POI embeddings are normalized,
-    # dot product is equivalent to cosine similarity.
-    scores = embeddings_subset @ query_embedding[0]
+    # 3. Score ALL POIs (soft boost mode)
+    print(f"[embeddings] Searching all {len(df)} POIs (soft boost mode)")
+    scores = embeddings @ query_embedding[0]
 
-    top_indices = np.argsort(scores)[::-1][:top_k]
+    top_indices = np.argsort(scores)[::-1][:top_k * 5]
+    search_df = df.copy()
+    if "poi_id" not in search_df.columns:
+        search_df["poi_id"] = search_df.index
+    search_df = search_df.reset_index(drop=True)
 
     results = search_df.iloc[top_indices].copy()
     results["embedding_score"] = scores[top_indices]
 
-    print(f"[embeddings] Query: '{query}' → {len(results)} results")
+    print(f"[embeddings] Query: '{query}' -> {len(results)} candidates")
 
-    if "poi_id" not in results.columns:
-        if "index" in results.columns:
-            results["poi_id"] = results["index"]
-        else:
-            results["poi_id"] = results.index
+    # 4. Soft boost
+    results = apply_intent_boost(
+        query, df, results, score_col="embedding_score",
+        intent_model=intent_model, intent_vectorizer=intent_vectorizer
+    )
 
+    # 5. Boolean filters
+    filters = parse_filters(query)
+    if filters:
+        print(f"[embeddings] Filters detected: {filters}")
+    results = apply_boolean_filters(results, filters)
+
+    # Keep only relevant columns
+    existing_cols = [col for col in RESULT_COLS if col in results.columns]
+    results = results[existing_cols + ["embedding_score"]]
+
+    # 6. GEO FIRST
+    near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
+    if near_me:
+        results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="embedding_score")
+
+    # 7. TEMP LAST
+    score_col = "combined_score" if "combined_score" in results.columns else "embedding_score"
+    results = apply_temporal_filter(results, query, filters, check_time=check_time, score_col=score_col)
+
+    results = results.head(top_k)
+    print(f"[embeddings] Results found: {len(results)}")
     return results

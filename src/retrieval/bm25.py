@@ -60,42 +60,65 @@ def build_bm25(df: pd.DataFrame, col: str = "poi_text_lemma") -> BM25Okapi:
 
 def search_bm25(
     query: str,
-    bm25: BM25Okapi,
+    bm25_index: BM25Okapi,
     df: pd.DataFrame,
     top_k: int = 10,
-    df_filtered: pd.DataFrame = None,
+    intent_model=None,
+    intent_vectorizer=None,
+    user_lat: float = None,
+    user_lon: float = None,
+    check_time=None,
 ) -> pd.DataFrame:
-    tokens = _tokenize_query(query)
+    from src.retrieval.common import (
+        apply_intent_boost,
+        get_query_core,
+        apply_boolean_filters,
+        apply_temporal_filter,
+        apply_geo_reranking,
+    )
+    from src.retrieval.query import parse_filters, RESULT_COLS
 
-    search_df = df_filtered.copy() if df_filtered is not None else df.copy()
+    # 1. Strip temporal phrases before BM25 scoring
+    query_core = get_query_core(query)
+    print(f"[bm25] Original:   '{query}'")
+    print(f"[bm25] Core:       '{query_core}'")
 
-    if search_df.empty:
-        print(f"[bm25] Query: '{query}' → 0 results")
-        return search_df.copy()
+    # 2. BM25 scoring on ALL POIs (soft boost mode)
+    print(f"[bm25] Searching all {len(df)} POIs (soft boost mode)")
+    tokenized_query = query_core.lower().split()
+    all_scores = bm25_index.get_scores(tokenized_query)
 
-    # Score cijeli korpus jednom - NE rebuildat BM25 na filtriranom subsetu.
-    # IDF mora biti računat na svih 24918 dokumenata, ne na filtriranom subsetu.
-    all_scores = bm25.get_scores(tokens)
+    top_indices = np.argsort(all_scores)[::-1][:top_k * 5]
+    results = df.iloc[top_indices].copy()
+    results["bm25_score"] = all_scores[top_indices]
 
-    # Izvuci skorove samo za filtrirane redove prema njihovim pozicijama u df.
-    filtered_positions = [df.index.get_loc(idx) for idx in search_df.index]
-    scores = all_scores[filtered_positions]
+    # 3. Soft boost
+    results = apply_intent_boost(
+        query, df, results, score_col="bm25_score",
+        intent_model=intent_model, intent_vectorizer=intent_vectorizer
+    )
 
-    candidate_k = min(len(scores), max(top_k * 20, top_k))
-    top_idx = np.argsort(scores)[::-1][:candidate_k]
+    # 4. Boolean filters
+    filters = parse_filters(query)
+    if filters:
+        print(f"[bm25] Filters detected: {filters}")
+    results = apply_boolean_filters(results, filters)
 
-    results = search_df.iloc[top_idx].copy()
-    results["bm25_score"] = scores[top_idx]
+    # Keep only relevant columns
+    existing_cols = [col for col in RESULT_COLS if col in results.columns]
+    results = results[existing_cols + ["bm25_score"]]
 
-    # Deduplicate known names, but keep multiple unknown POIs.
-    if "name" in results.columns:
-        known = results[results["name"] != "unknown"].drop_duplicates(subset=["name"])
-        unknown = results[results["name"] == "unknown"]
-        results = pd.concat([known, unknown], ignore_index=False)
+    # 5. GEO FIRST
+    near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
+    if near_me:
+        results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="bm25_score")
+
+    # 6. TEMP LAST
+    score_col = "combined_score" if "combined_score" in results.columns else "bm25_score"
+    results = apply_temporal_filter(results, query, filters, check_time=check_time, score_col=score_col)
 
     results = results.head(top_k)
-
-    print(f"[bm25] Query: '{query}' → {len(results)} results")
+    print(f"[bm25] Results found: {len(results)}")
     return results
 
 

@@ -225,7 +225,7 @@ def detect_specific_category(query: str):
     if "car parts" in q:
         return ["car_parts"]
 
-    if "cashpoint" in q or "cash machine" in q:
+    if "cashpoint" in q or "cash machine" in q or "bank machine" in q:
         return ["atm"]
 
     if "atm" in q:
@@ -351,13 +351,12 @@ def search(
     user_lon: float = None,
     check_time: datetime = None,
 ) -> pd.DataFrame:
+    from src.retrieval.common import apply_intent_boost
+
     # Expand synonyms before anything else
     query = expand_query_synonyms(query)
 
-    # Strip temporal phrases before normalization, so TF-IDF/embeddings
-    # matching isn't polluted by words like "open"/"now"/"late" (those are
-    # still captured separately via parse_filters() + resolve_check_time(),
-    # which use the original, un-stripped query).
+    # Strip temporal phrases before TF-IDF scoring
     query_core = extract_temporal_phrase(query)
     query_norm = normalize(preprocess_text(query_core) or query_core)
     if not query_norm:
@@ -367,81 +366,43 @@ def search(
     print(f"[query] Original:   '{query}'")
     print(f"[query] Normalized: '{query_norm}'")
 
-    # Predict intent and filter by category
-    df_filtered = df.copy()
-    if intent_model is not None and intent_vectorizer is not None:
-        intent, confidence = predict(query, intent_model, intent_vectorizer)
-        print(f"[query] Intent: {intent} ({confidence}%)")
-
-        specific_categories = detect_specific_category(query)
-
-        CONFIDENCE_THRESHOLD = 40.0
-
-        if specific_categories:
-            categories = specific_categories
-            print(f"[query] Specific category override: {categories}")
-        elif not has_category_signal(query):
-            categories = None
-            print(f"[query] No category signal detected -> skipping intent category filter, searching all POIs")
-        else:
-            if confidence >= CONFIDENCE_THRESHOLD:
-                categories = INTENT_TO_CATEGORY.get(intent)
-                print(f"[query] Intent filter applied: {intent} ({confidence}%)")
-            else:
-                categories = None
-                print(f"[query] Low intent confidence ({confidence}%) -> skipping intent category filter")
-
-        if categories:
-            df_filtered = df_filtered[df_filtered["category_final"].isin(categories)]
-            print(f"[query] Filtered to categories: {categories} ({len(df_filtered)} POIs)")
-
-        
-
-        
-
-    # Extract boolean filters
+    # Extract boolean filters from original query
     filters = parse_filters(query)
     if filters:
         print(f"[query] Filters detected: {filters}")
 
-    # TF-IDF search
+    # TF-IDF search on ALL POIs (soft boost mode — no hard filtering)
+    print(f"[query] Searching all {len(df)} POIs (soft boost mode)")
     if vectorizer is not None and tfidf_matrix is not None:
-        filtered_indices = df_filtered.index.tolist()
-        original_indices = df.index.tolist()
-        mask = [i for i, idx in enumerate(original_indices) if idx in filtered_indices]
-
-        if not mask:
-            print("[query] No POIs after filtering")
-            return pd.DataFrame()
-
-        tfidf_subset = tfidf_matrix[mask]
         query_vec = vectorizer.transform([query_norm])
-        scores = cosine_similarity(query_vec, tfidf_subset).flatten()
+        scores = cosine_similarity(query_vec, tfidf_matrix).flatten()
 
         top_indices = np.argsort(scores)[::-1][:top_k * 5]
-        results = df_filtered.iloc[top_indices].copy()
+        results = df.iloc[top_indices].copy()
         results["similarity_score"] = scores[top_indices]
     else:
-        results = df_filtered.copy()
+        results = df.copy()
         results["similarity_score"] = 0.0
+
+    # Soft boost — boost score for POIs in predicted intent category
+    results = apply_intent_boost(
+        query, df, results, score_col="similarity_score",
+        intent_model=intent_model, intent_vectorizer=intent_vectorizer
+    )
 
     # Apply boolean filters (wheelchair, takeaway, is_24_7)
     for col, val in filters.items():
         if col in ("open_now",):
-            continue  # handled separately below
+            continue
         if col in results.columns:
             results = results[results[col] == val]
-
-    # Apply open_now filter (requires parsing opening_hours per row)
-    if filters.get("open_now"):
-        results = apply_open_now_filter(results, query=query, check_time=check_time, score_col="similarity_score")
 
     # Keep only relevant columns
     existing_cols = [col for col in RESULT_COLS if col in results.columns]
     extra_cols = [c for c in ["is_open_now"] if c in results.columns]
-    results = results[existing_cols + extra_cols + ["similarity_score"]].head(top_k)
+    results = results[existing_cols + extra_cols + ["similarity_score"]]
 
-    # Apply geo re-ranking if "near me" in query
+    # GEO FIRST
     near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
     if near_me:
         lat = user_lat or PORTLAND_CENTER[0]
@@ -454,6 +415,14 @@ def search(
                 score_col="similarity_score",
             )
 
+    # TEMP LAST
+    if filters.get("open_now"):
+        score_col = "combined_score" if "combined_score" in results.columns else "similarity_score"
+        results = apply_open_now_filter(
+            results, query=query, check_time=check_time, score_col=score_col
+        )
+
+    results = results.head(top_k)
     print(f"[query] Results found: {len(results)}")
     return results
 
