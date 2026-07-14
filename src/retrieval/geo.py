@@ -69,8 +69,8 @@ def combine_with_geo(
     results: pd.DataFrame,
     user_lat: float,
     user_lon: float,
-    semantic_weight: float = 0.7,
-    geo_weight: float = 0.3,
+    semantic_weight: float = 0.5,
+    geo_weight: float = 0.5,
     score_col: str = "embedding_score",
     decay: float = 0.1,
 ) -> pd.DataFrame:
@@ -81,8 +81,8 @@ def combine_with_geo(
         results: DataFrame with POI results and semantic scores
         user_lat: User's latitude
         user_lon: User's longitude
-        semantic_weight: Weight for semantic score (default 0.7)
-        geo_weight: Weight for geo score (default 0.3)
+        semantic_weight: Weight for semantic score (default 0.5)
+        geo_weight: Weight for geo score (default 0.5)
         score_col: Name of semantic score column
         decay: Distance decay factor
 
