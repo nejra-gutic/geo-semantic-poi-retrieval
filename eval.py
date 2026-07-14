@@ -7,6 +7,8 @@ Uses per-query relevance labels from:
 Run:
     python3 eval.py
 """
+import contextlib
+import io
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
@@ -67,11 +69,15 @@ def hit_at_k(retrieved_ids: list, relevant_ids: set, k: int) -> int:
 def ndcg_at_k(retrieved_ids: list, relevant_ids: set, k: int) -> float:
     top_k = retrieved_ids[:k]
     relevance = [1 if pid in relevant_ids else 0 for pid in top_k]
-    if sum(relevance) == 0:
-        return 0.0
     dcg = sum(rel / np.log2(i + 2) for i, rel in enumerate(relevance))
-    ideal_relevance = sorted(relevance, reverse=True)
-    idcg = sum(rel / np.log2(i + 2) for i, rel in enumerate(ideal_relevance))
+
+    # IDCG must reflect the best possible ranking given the TRUE number of
+    # relevant docs (capped at k) -- not just those the system happened to
+    # retrieve. Sorting only top_k's binary relevance understates IDCG when
+    # the system misses relevant docs, which artificially inflates NDCG.
+    ideal_hits = min(len(relevant_ids), k)
+    idcg = sum(1 / np.log2(i + 2) for i in range(ideal_hits))
+
     return dcg / idcg if idcg > 0 else 0.0
 
 
@@ -101,6 +107,7 @@ def evaluate(
     relevance_labels: dict,
     get_results_fn,
     k_values: list,
+    verbose: bool = False,
 ):
     print(f"\n{'=' * 60}")
     print(f"  {name}")
@@ -112,27 +119,35 @@ def evaluate(
     for query in queries:
         relevant_ids = relevance_labels.get(query, set())
         if not relevant_ids:
-            print(f"  [SKIP] No relevance labels for: '{query}'")
+            if verbose:
+                print(f"  [SKIP] No relevance labels for: '{query}'")
             continue
-        results = get_results_fn(query)
+
+        with contextlib.redirect_stdout(io.StringIO()):
+            results = get_results_fn(query)
+
         if results.empty:
             retrieved_ids = []
         else:
             results = ensure_poi_id(results)
             retrieved_ids = results["poi_id"].tolist()
-        print(f"\n  Query: '{query}'")
-        print(f"  Relevant POIs: {len(relevant_ids)} | Retrieved: {len(retrieved_ids)}")
+
+        if verbose:
+            print(f"\n  Query: '{query}'")
+            print(f"  Relevant POIs: {len(relevant_ids)} | Retrieved: {len(retrieved_ids)}")
+
         for k in k_values:
             m = compute_metrics(retrieved_ids, relevant_ids, k)
             for metric, value in m.items():
                 all_metrics[k][metric].append(value)
-            print(
-                f"    @{k:2d}  "
-                f"P={m['precision']:.3f}  "
-                f"R={m['recall']:.3f}  "
-                f"Hit={m['hit']}  "
-                f"NDCG={m['ndcg']:.3f}"
-            )
+            if verbose:
+                print(
+                    f"    @{k:2d}  "
+                    f"P={m['precision']:.3f}  "
+                    f"R={m['recall']:.3f}  "
+                    f"Hit={m['hit']}  "
+                    f"NDCG={m['ndcg']:.3f}"
+                )
     print(f"\n  {'─' * 50}")
     print("  AVERAGES")
     for k in k_values:

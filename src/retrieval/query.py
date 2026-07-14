@@ -70,57 +70,37 @@ INTENT_TO_CATEGORY = {
     "find_entertainment": ["theatre", "cinema", "museum", "gallery", "attraction", "nightclub"],
 }
 
-# Words that signal the query is ABOUT a specific category of place.
-# If a query contains none of these, hard category filtering is skipped
-# (e.g. "who is open this late" has no category signal -> search everything,
-# let boolean filters like open_now do the work instead).
 CATEGORY_SIGNAL_WORDS = {
-    # cafe
     "coffee", "coffe", "cafe", "cafee", "espresso", "latte", "cappuccino",
     "mocha", "flat white", "caffeine", "tea house", "roastery", "bakery",
     "pastry",
-    # food
     "restaurant", "restaurants", "food", "eat", "dinner", "lunch",
     "breakfast", "brunch", "pizza", "burger", "sushi", "ramen", "taco",
     "kebab", "bbq", "seafood", "chinese", "thai", "italian", "mexican",
     "indian", "vegan", "fried chicken", "takeout", "takeaway",
-    # service
     "pharmacy", "chemist", "hospital", "doctor", "dentist", "bank",
     "bank machine", "atm", "clinic", "veterinary", "vet", "optician",
     "eye doctor", "chiropractor", "physio", "post office", "library",
     "urgent care", "vaccinated", "vaccination",
-    # shop
     "shop", "shops", "stores", "store", "buy", "grocery", "supermarket",
     "bookshop", "bookstore", "book", "pet store", "pet shop", "pet food",
     "electronics", "hairdresser", "haircut", "barber", "hair salon",
     "toy", "sneaker", "shoe", "florist", "boutique", "fashion",
     "sports equipment", "hardware",
-    # transport
     "parking", "parkng", "transport", "bus", "taxi", "car", "bicycle",
     "bike", "charging", "charger", "fuel", "gas station", "petrol",
     "motorcycle", "vehicle",
-    # worship
     "church", "mosque", "temple", "synagogue", "worship",
-    # entertainment
     "theatre", "theater", "cinema", "movie", "museum", "gallery",
     "nightclub", "club", "attraction",
-    # shop dodaci
     "beauty", "salon", "spa", "cannabis", "dispensary", "tattoo",
     "alcohol", "liquor", "tire", "tyre",
-    # service dodaci
     "kindergarten", "preschool", "community center", "massage",
     "dry cleaning", "laundry", "laundromat",
 }
 
 
 def has_category_signal(query: str) -> bool:
-    """
-    Returns True if the query contains at least one word that points to a
-    specific category of place. If False, the query is likely a pure
-    temporal/generic question (e.g. "who is open this late") with nothing
-    for the intent classifier to latch onto -- in that case we should NOT
-    apply a hard category filter, since the classifier is just guessing.
-    """
     q = query.lower()
     return any(word in q for word in CATEGORY_SIGNAL_WORDS)
 
@@ -148,6 +128,18 @@ def expand_query_synonyms(query: str) -> str:
     return q
 
 
+# Fraze koje signaliziraju da query traži "open now" (vremenski uslovljen)
+# rezultat -- koristi ih i parse_filters() (da odluci DA LI aktivirati
+# open_now filter) i TEMPORAL_PHRASES ispod (da ih strip-uje iz teksta
+# prije semantic scoring-a). Jedan izvor istine umjesto dvije rucno
+# sinhronizovane liste.
+OPEN_NOW_SIGNAL_PHRASES = [
+    "open now", "open right now", "still open", "open today",
+    "open this", "open late", "open early", "open after",
+    "currently open", "open at", "open until",
+]
+
+
 def parse_filters(query: str) -> dict:
     filters = {}
     q = query.lower()
@@ -170,20 +162,14 @@ def parse_filters(query: str) -> dict:
         filters["has_takeaway"] = 1
     if any(w in q for w in ["24/7", "24 7", "open 24", "always open"]):
         filters["is_24_7"] = True
-    if any(w in q for w in [
-        "open now", "open right now", "still open", "open today",
-        "open this", "open late", "open early", "open after",
-        "currently open", "open at", "open until",
-    ]):
+    if any(w in q for w in OPEN_NOW_SIGNAL_PHRASES):
         filters["open_now"] = True
 
     return filters
 
-TEMPORAL_PHRASES = [
-    "open right now", "open now", "still open", "open today",
-    "open this late", "open this early", "open this",
-    "open late", "open early", "open after", "open until", "open at",
-    "currently open", "after midnight", "this evening", "this morning",
+TEMPORAL_PHRASES = OPEN_NOW_SIGNAL_PHRASES + [
+    "open this late", "open this early",
+    "after midnight", "this evening", "this morning",
     "all night", "right now", "tonight", "this late",
     "24/7", "24 7", "open 24", "always open",
 ]
@@ -195,29 +181,21 @@ WEEKDAY_NAMES = [
 
 
 def extract_temporal_phrase(query: str) -> str:
-    """
-    Remove temporal/hours phrases from a query, returning the "core" text
-    that should be sent to TF-IDF/BM25/embeddings for semantic matching.
-    The original (un-stripped) query is still used separately for
-    parse_filters() and resolve_check_time(), which need the full phrasing.
-    """
     q = query.lower()
 
     for phrase in TEMPORAL_PHRASES:
         q = q.replace(phrase, " ")
 
-    # "open on <weekday>" / "open <weekday>" -> strip "open" + weekday together
     for day in WEEKDAY_NAMES:
         q = q.replace(f"open on {day}", " ")
         q = q.replace(f"open {day}", " ")
         q = q.replace(day, " ")
 
-    # clean up any leftover standalone "open" that's no longer part of a
-    # meaningful phrase (e.g. "pharmacy open" -> "pharmacy")
     q = " ".join(w for w in q.split() if w != "open")
 
     q = " ".join(q.split())
-    return q if q else query  # fallback to original if we stripped everything
+    return q if q else query
+
 
 def detect_specific_category(query: str):
     q = query.lower()
@@ -227,10 +205,10 @@ def detect_specific_category(query: str):
 
     if "bicycle rental" in q or "bike rental" in q:
         return ["bicycle_rental"]
-    
+
     if "bike parking" in q or "bicycle parking" in q or "lock my bike" in q or "lock my bicycle" in q:
         return ["bicycle_parking"]
-    
+
     if "bus stop" in q or "bus station" in q:
         return ["bus_station"]
 
@@ -239,7 +217,7 @@ def detect_specific_category(query: str):
 
     if "parking" in q or "parkng" in q:
         return ["parking", "parking_space", "parking_entrance"]
-    
+
     if "car parts" in q:
         return ["car_parts"]
 
@@ -261,7 +239,6 @@ def detect_specific_category(query: str):
     if "dentist" in q or "dental" in q:
         return ["dentist"]
 
-    # MUST come before generic "doctor"/"clinic" check below
     if "optician" in q or "eye doctor" in q or "eye care" in q:
         return ["optician", "doctors", "clinic"]
 
@@ -273,7 +250,7 @@ def detect_specific_category(query: str):
 
     if "vet" in q or "veterinary" in q or "animal" in q or "veterinarian" in q:
         return ["veterinary"]
-    
+
     if "chiropractor" in q or "physio" in q:
         return ["doctors", "clinic"]
 
@@ -297,12 +274,10 @@ def detect_specific_category(query: str):
 
     if "school" in q or "university" in q or "college" in q or "campus" in q:
         return ["school", "university", "college"]
-    
-    # --- NOVO: worship ---
+
     if "church" in q or "mosque" in q or "temple" in q or "synagogue" in q or "worship" in q or "chapel" in q:
         return ["place_of_worship"]
 
-    # --- NOVO: entertainment ---
     if "theatre" in q or "theater" in q:
         return ["theatre"]
 
@@ -321,7 +296,6 @@ def detect_specific_category(query: str):
     if "attraction" in q:
         return ["attraction"]
 
-    # --- NOVO: beauty/tattoo/cannabis/tyres ---
     if "tattoo" in q:
         return ["tattoo"]
 
@@ -347,25 +321,6 @@ def detect_specific_category(query: str):
 
 
 def apply_open_now_filter(results: pd.DataFrame, query: str = "", check_time: datetime = None, boost_pct: float = 0.2, score_col: str = "similarity_score") -> pd.DataFrame:
-    """
-    Annotate results with 'is_open_now' (True/False/None) and adjust score
-    accordingly instead of hard-dropping closed POIs:
-      - open (True)    -> +boost_pct * max_score
-      - unknown (None) -> no change (don't penalize missing OSM data)
-      - closed (False) -> -boost_pct * max_score (penalized, but still
-        shown, so the user can see it exists even if currently closed)
-
-    Uses query phrasing to decide WHEN to check (e.g. "open late tonight"
-    checks ~22:00, not right now) via is_open_for_query(). If check_time is
-    explicitly provided, it overrides this resolution.
-
-    The adjustment is RELATIVE: boost_pct * max score in the pool, so the
-    effect is consistent across TF-IDF/Embeddings/Hybrid even though their
-    raw score ranges differ. score_col specifies which column to adjust
-    (defaults to 'similarity_score'; callers using embeddings/hybrid scores
-    should pass 'embedding_score' / 'hybrid_score' / 'combined_score' as
-    appropriate).
-    """
     if "opening_hours" not in results.columns or results.empty:
         results = results.copy()
         results["is_open_now"] = None
@@ -416,17 +371,14 @@ def search(
 ) -> pd.DataFrame:
     from src.retrieval.common import apply_intent_boost
 
-    # 0. Guard: df mora biti u istom redoslijedu/dužini kao TF-IDF matrica
     if tfidf_matrix is not None and len(df) != tfidf_matrix.shape[0]:
         raise ValueError(
             f"[query] df length ({len(df)}) != tfidf_matrix rows ({tfidf_matrix.shape[0]}) "
             f"— je li df filtriran/sortiran nakon build_tfidf()?"
         )
-    
-    # Expand synonyms before anything else
+
     query = expand_query_synonyms(query)
 
-    # Strip temporal phrases before TF-IDF scoring
     query_core = extract_temporal_phrase(query)
     query_norm = normalize(preprocess_text(query_core) or query_core)
     if not query_norm:
@@ -436,12 +388,10 @@ def search(
     print(f"[query] Original:   '{query}'")
     print(f"[query] Normalized: '{query_norm}'")
 
-    # Extract boolean filters from original query
     filters = parse_filters(query)
     if filters:
         print(f"[query] Filters detected: {filters}")
 
-    # TF-IDF search on ALL POIs (soft boost mode — no hard filtering)
     print(f"[query] Searching all {len(df)} POIs (soft boost mode)")
     if vectorizer is not None and tfidf_matrix is not None:
         query_vec = vectorizer.transform([query_norm])
@@ -454,30 +404,24 @@ def search(
         results = df.copy()
         results["similarity_score"] = 0.0
 
-    # Soft boost — boost score for POIs in predicted intent category
     results = apply_intent_boost(
         query, df, results, score_col="similarity_score",
         intent_model=intent_model, intent_vectorizer=intent_vectorizer
     )
 
-    # Apply boolean filters (wheelchair, takeaway, is_24_7)
     for col, val in filters.items():
         if col in ("open_now",):
             continue
         if col in results.columns:
             results = results[results[col] == val]
 
-    # Keep only relevant columns
     existing_cols = [col for col in RESULT_COLS if col in results.columns]
     extra_cols = [c for c in ["is_open_now"] if c in results.columns]
     results = results[existing_cols + extra_cols + ["similarity_score"]]
 
-
-    # GEO FIRST
     from src.retrieval.common import apply_geo_reranking
     results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="similarity_score")
 
-    # TEMP LAST
     if filters.get("open_now"):
         score_col = "combined_score" if "combined_score" in results.columns else "similarity_score"
         results = apply_open_now_filter(

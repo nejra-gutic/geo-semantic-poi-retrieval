@@ -62,8 +62,17 @@ def resolve_check_time(query: str, base_time: datetime = None) -> datetime:
 
     Handles:
       - "now" / "right now" / "currently" / "today" -> base_time as-is
-      - "late" / "tonight" / "after midnight" -> estimate 22:00 same day
+      - "after midnight" -> estimate 00:30, shifted to the NEXT day (this is
+        genuinely after 00:00, unlike "late"/"tonight" which are estimated
+        at 22:00 the same day -- these were previously grouped together,
+        which meant "after midnight" was checked at 22:00, i.e. BEFORE
+        midnight, giving wrong answers for places that close before 00:00)
+      - "late" / "tonight" / "this evening" / "all night" -> estimate 22:00
+        same day
       - "early morning" / "before Xam" -> estimate 07:00 same day
+      - "tomorrow" -> shift check date forward by one day (combines with
+        the hour-of-day rules above, e.g. "open early tomorrow" -> 07:00
+        next day)
       - specific weekday mentioned ("saturday", "sunday", ...) -> same time,
         but shifted to the next occurrence of that weekday
       - default -> base_time (treated as "now")
@@ -88,13 +97,22 @@ def resolve_check_time(query: str, base_time: datetime = None) -> datetime:
 
     check_time = base_time
 
-    if any(w in q for w in ["late", "tonight", "after midnight", "this evening", "all night"]):
+    if "after midnight" in q:
+        # Genuinely after 00:00 -> next day, early morning. NOT the same
+        # bucket as "late"/"tonight" (22:00), which is still before midnight.
+        check_time = (check_time + timedelta(days=1)).replace(
+            hour=0, minute=30, second=0, microsecond=0
+        )
+    elif any(w in q for w in ["late", "tonight", "this evening", "all night"]):
         check_time = check_time.replace(hour=22, minute=0, second=0, microsecond=0)
     elif any(w in q for w in ["early morning", "before 7", "before 8"]):
         check_time = check_time.replace(hour=7, minute=0, second=0, microsecond=0)
     elif any(w in q for w in ["now", "right now", "currently", "rn", "yet", "still"]):
         pass  # keep as-is
     # else: "today", "open today" etc. -> keep as-is (default "now" check)
+
+    if "tomorrow" in q and "after midnight" not in q:
+        check_time = check_time + timedelta(days=1)
 
     if target_weekday is not None:
         days_ahead = (target_weekday - check_time.weekday()) % 7
