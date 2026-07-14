@@ -2,7 +2,7 @@
 tune_hybrid_weights.py
 ----------------------
 Grid search za hybrid BM25 + Embeddings težine.
-Evaluira različite kombinacije w_bm25 i w_emb na relevance_labels_expanded.csv.
+Evaluira različite kombinacije w_bm25 i w_emb na relevance_labels_validation.csv.
 """
 
 import numpy as np
@@ -15,8 +15,7 @@ from src.retrieval.intent_classifier import load_model
 from src.retrieval.bm25 import build_bm25, search_bm25
 from src.retrieval.embeddings import load_embedding_model, get_or_build_embeddings, search_embeddings
 
-K_VALUES = [5, 10, 20, 50]
-RELEVANCE_PATH = "data/relevance_labels_validation.csv"
+RELEVANCE_PATH = "data/relevance_labels_validation_combined.csv"
 
 # === UČITAJ PODATKE ===
 df = load_csv("data/processed/cleaned_pois.csv")
@@ -38,32 +37,52 @@ for _, row in labels_df.iterrows():
     ids = set(int(x.strip()) for x in str(row["relevant_poi_ids"]).split(",") if x.strip())
     relevance_labels[q] = ids
 
+
 def ndcg_at_k(retrieved_ids, relevant_ids, k):
     top_k = retrieved_ids[:k]
     relevance = [1 if pid in relevant_ids else 0 for pid in top_k]
-    if sum(relevance) == 0:
-        return 0.0
+
     dcg = sum(rel / np.log2(i + 2) for i, rel in enumerate(relevance))
-    ideal = sorted(relevance, reverse=True)
-    idcg = sum(rel / np.log2(i + 2) for i, rel in enumerate(ideal))
+
+    # IDCG mora odražavati broj STVARNO relevantnih POI-ja (do k), a ne samo
+    # onih koji su slučajno pronađeni -- inače query s jednim pogotkom na
+    # prvom mjestu dobija NDCG 1.0 čak i kad postoji mnogo relevantnih POI-ja.
+    ideal_hits = min(len(relevant_ids), k)
+    idcg = sum(1 / np.log2(i + 2) for i in range(ideal_hits))
+
     return dcg / idcg if idcg > 0 else 0.0
 
+
 def evaluate_weights(w_bm25, w_emb):
-    ndcg_10_scores = []
+    ndcg_5_scores = []
 
     for query in queries:
         relevant_ids = relevance_labels.get(query, set())
         if not relevant_ids:
             continue
 
-        bm25_results = search_bm25(query, bm25, df, top_k=200)
-        emb_results = search_embeddings(query, embedding_model, poi_embeddings, df, top_k=200)
+        # apply_temporal=False: tuning mjeri isključivo BM25+embeddings
+        # kombinaciju, bez vremenski promjenjivog open_now boosta.
+        bm25_results = search_bm25(
+            query, bm25, df,
+            top_k=200,
+            intent_model=intent_model,
+            intent_vectorizer=intent_vectorizer,
+            apply_temporal=False,
+        )
+        emb_results = search_embeddings(
+            query, embedding_model, poi_embeddings, df,
+            top_k=200,
+            intent_model=intent_model,
+            intent_vectorizer=intent_vectorizer,
+            apply_temporal=False,
+        )
 
-        # poi_id
+        # search_bm25()/search_embeddings() već vraćaju ispravan poi_id --
+        # NE prepisivati sa .index, jer kod embeddingsa index rezultata ne
+        # mora odgovarati originalnom poi_id-u (spajalo bi na pogrešna mjesta).
         bm25_results = bm25_results.copy()
         emb_results = emb_results.copy()
-        bm25_results["poi_id"] = bm25_results.index
-        emb_results["poi_id"] = emb_results.index
 
         score_col = [c for c in bm25_results.columns if "score" in c.lower()]
         if score_col:
@@ -90,9 +109,10 @@ def evaluate_weights(w_bm25, w_emb):
         results = hybrid.sort_values("hybrid_score", ascending=False).head(50)
         retrieved_ids = results["poi_id"].tolist()
 
-        ndcg_10_scores.append(ndcg_at_k(retrieved_ids, relevant_ids, 5))
+        ndcg_5_scores.append(ndcg_at_k(retrieved_ids, relevant_ids, 5))
 
-    return np.mean(ndcg_10_scores)
+    return np.mean(ndcg_5_scores)
+
 
 # === GRID SEARCH ===
 weights = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
@@ -106,7 +126,7 @@ print("-" * 30)
 for w_bm25 in weights:
     w_emb = round(1.0 - w_bm25, 1)
     score = evaluate_weights(w_bm25, w_emb)
-    results_table.append({"w_bm25": w_bm25, "w_emb": w_emb, "ndcg_10": score})
+    results_table.append({"w_bm25": w_bm25, "w_emb": w_emb, "ndcg_5": score})
     print(f"{w_bm25:>8.1f} {w_emb:>8.1f} {score:>10.4f}")
 
     if score > best_score:
