@@ -68,7 +68,14 @@ def search_bm25(
     user_lat: float = None,
     user_lon: float = None,
     check_time=None,
+    apply_temporal: bool = True,
 ) -> pd.DataFrame:
+    """
+    apply_temporal: if False, skips the temporal/open_now boost step.
+    Set to False when this function's output is going to be merged into a
+    Hybrid result (e.g. in app.py), so the temporal boost is applied exactly
+    once -- after the merge -- instead of once here AND once again downstream.
+    """
     from src.retrieval.common import (
         apply_intent_boost,
         get_query_core,
@@ -118,9 +125,10 @@ def search_bm25(
     # 5. GEO FIRST
     results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="bm25_score")
 
-    # 6. TEMP LAST
-    score_col = "combined_score" if "combined_score" in results.columns else "bm25_score"
-    results = apply_temporal_filter(results, query, filters, check_time=check_time, score_col=score_col)
+    # 6. TEMP LAST (skip if this call feeds into a Hybrid merge downstream)
+    if apply_temporal:
+        score_col = "combined_score" if "combined_score" in results.columns else "bm25_score"
+        results = apply_temporal_filter(results, query, filters, check_time=check_time, score_col=score_col)
 
     results = results.head(top_k)
     print(f"[bm25] Results found: {len(results)}")
