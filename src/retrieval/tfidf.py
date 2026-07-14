@@ -127,36 +127,55 @@ def search_tfidf(
     tfidf_matrix,
     df: pd.DataFrame,
     top_k: int = 10,
+    intent_model=None,
+    intent_vectorizer=None,
+    user_lat: float = None,
+    user_lon: float = None,
+    check_time=None,
 ) -> pd.DataFrame:
-    """
-    Search POI dataset using TF-IDF cosine similarity.
+    from src.retrieval.common import (
+        apply_intent_boost,
+        get_query_core,
+        apply_boolean_filters,
+        apply_temporal_filter,
+        apply_geo_reranking,
+    )
+    from src.retrieval.query import parse_filters, RESULT_COLS
 
-    Args:
-        query:        user input string
-        vectorizer:   fitted TfidfVectorizer
-        tfidf_matrix: fitted TF-IDF matrix
-        df:           cleaned POI dataframe
-        top_k:        number of results to return
+    if len(df) != tfidf_matrix.shape[0]:
+        raise ValueError(
+            f"[tfidf] df length ({len(df)}) != tfidf_matrix rows ({tfidf_matrix.shape[0]})"
+        )
 
-    Returns:
-        DataFrame of top_k matching POIs with similarity scores
-    """
-
-    query_norm = normalize(preprocess_text(query) or query)
+    query_core = get_query_core(query)
+    query_norm = normalize(preprocess_text(query_core) or query_core)
     if not query_norm:
         return pd.DataFrame()
+
     query_vec = vectorizer.transform([query_norm])
-    
     scores = cosine_similarity(query_vec, tfidf_matrix).flatten()
 
-    top_indices = np.argsort(scores)[::-1][:top_k]
+    top_indices = np.argsort(scores)[::-1][:top_k * 5]
     results = df.iloc[top_indices].copy()
     results["similarity_score"] = scores[top_indices]
 
-    print(f"[tfidf] Query: '{query}'")
-    print(f"[tfidf] Top {top_k} results (similarity scores):")
-    print(results[["name", "category_final", "similarity_score"]].to_string())
+    results = apply_intent_boost(
+        query, df, results, score_col="similarity_score",
+        intent_model=intent_model, intent_vectorizer=intent_vectorizer
+    )
 
+    filters = parse_filters(query)
+    results = apply_boolean_filters(results, filters)
+
+    existing_cols = [col for col in RESULT_COLS if col in results.columns]
+    results = results[existing_cols + ["similarity_score"]]
+
+    results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="similarity_score")
+
+    score_col = "combined_score" if "combined_score" in results.columns else "similarity_score"
+    results = apply_temporal_filter(results, query, filters, check_time=check_time, score_col=score_col)
+
+    results = results.head(top_k)
     return results
 
 
