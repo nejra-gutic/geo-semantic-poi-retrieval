@@ -23,37 +23,34 @@ except ImportError:
 
 
 def is_open_now(hours_str: str, check_time: datetime = None) -> bool | None:
-    """
-    Check if a POI is open at check_time (default: now).
-
-    Returns:
-        True  -> open
-        False -> closed
-        None  -> unknown (missing data, unparseable string, or library
-                 unavailable)
-    """
     if not hours_str or not isinstance(hours_str, str) or not hours_str.strip():
         return None
     if not OPENING_HOURS_AVAILABLE:
         return None
 
+    # Neki OSM zapisi su slobodan tekst umjesto pravog opening_hours formata
+    # (npr. "Temporarily closed", "by appointment") -- ovo NIJE isto sto i
+    # nedostajuci podatak, pa provjeri eksplicitno prije parsiranja.
+    text_lower = hours_str.strip().strip('"').lower()
+    if "closed" in text_lower and not any(c.isdigit() for c in text_lower):
+        return False  # eksplicitno zatvoreno, ne nepoznato
+
     if check_time is None:
         check_time = datetime.now()
 
-    text = hours_str.strip().split("||")[0].strip()  # take only first rule if multiple
+    text = hours_str.strip().split("||")[0].strip()
 
     try:
         oh = OpeningHours(text)
         state = oh.state(check_time)
-        state_name = str(state).split(".")[-1].upper()  # "State.OPEN" -> "OPEN"
+        state_name = str(state).split(".")[-1].upper()
         if state_name == "OPEN":
             return True
         if state_name == "CLOSED":
             return False
-        return None  # unknown / unrecognized state
+        return None
     except Exception:
         return None
-
 
 def resolve_check_time(query: str, base_time: datetime = None) -> datetime:
     """
