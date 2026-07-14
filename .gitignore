@@ -226,3 +226,5 @@ models/*.pkl
 models/*.png
 
 models/data/failure_analysis.csv
+data/failure_analysis.csv
+models/
