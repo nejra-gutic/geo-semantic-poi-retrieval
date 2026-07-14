@@ -208,17 +208,19 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
     from src.retrieval.embeddings import search_embeddings
     from src.retrieval.common import apply_geo_reranking
     from src.retrieval.geo import haversine_distance
-    from src.retrieval.query import search
+    from src.retrieval.query import search, OPEN_NOW_SIGNAL_PHRASES
     from src.retrieval.hours import is_open_now
 
     q = query.lower()
     q = q.replace("opened", "open")
 
-    is_hours_query = any(w in q for w in [
-        "open now", "open right now", "still open", "open today",
-        "open this", "open late", "open early", "open after",
-        "currently open", "open at", "open until",
-    ])
+    # FIX: koristi jedan izvor istine (query.py::OPEN_NOW_SIGNAL_PHRASES)
+    # umjesto ručno kopirane liste koja se mogla razminuti s query.py
+    is_hours_query = any(w in q for w in OPEN_NOW_SIGNAL_PHRASES)
+
+    # FIX: near_me se sad računa jednom na vrhu, koristi se i za
+    # Embeddings i za Hybrid granu (prije je postojao samo unutar Hybrid)
+    near_me = any(w in q for w in ["near me", "nearby", "close by", "near downtown"])
 
     if method == "TF-IDF":
         results = search(
@@ -233,7 +235,9 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
         )
 
     elif method == "Embeddings":
-        pool_size = 100 if is_hours_query else 10
+        # FIX: pool se sad širi i za "near me" upite, ne samo za hours upite
+        # (prije je geo rerank imao pool od svega 10 kandidata za near_me upite)
+        pool_size = 100 if (is_hours_query or near_me) else 10
         results = search_embeddings(
             query, embedding_model, poi_embeddings, df,
             top_k=pool_size,
@@ -241,23 +245,28 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             intent_vectorizer=intent_vectorizer,
             user_lat=user_lat,
             user_lon=user_lon,
+            # apply_temporal ostaje True (default) -- search_embeddings već
+            # sam primjenjuje apply_temporal_filter interno. Ranije se ovdje
+            # DODATNO zvao apply_open_now_filter, pa se temporal boost
+            # primjenjivao dvaput na isti rezultat -- uklonjeno.
         )
-        if is_hours_query and "opening_hours" in results.columns:
-            from src.retrieval.query import apply_open_now_filter
-            score_col = "combined_score" if "combined_score" in results.columns else "embedding_score"
-            results = apply_open_now_filter(results, query=query, boost_pct=0.2, score_col=score_col)
         results = results.head(10)
 
     elif method == "Hybrid":
+        # apply_temporal=False: temporal/open_now boost se primjenjuje TAČNO
+        # JEDNOM, niže, nakon što se bm25+embeddings rezultati spoje. Bez ovoga
+        # bi se boost primjenjivao ovdje po metodi PA JOŠ JEDNOM na hybrid_score.
         bm25_results = search_bm25(
             query, bm25, df, top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            apply_temporal=False,
         )
         emb_results = search_embeddings(
             query, embedding_model, poi_embeddings, df, top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            apply_temporal=False,
         )
 
         bm25_results = bm25_results.copy()
@@ -288,8 +297,7 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
         else:
             hybrid["emb_norm"] = 0
 
-        hybrid["hybrid_score"] = 0.2 * hybrid["bm25_norm"] + 0.8 * hybrid["emb_norm"]
-        near_me = any(w in q for w in ["near me", "nearby", "close by", "near downtown"])
+        hybrid["hybrid_score"] = 0.1 * hybrid["bm25_norm"] + 0.9 * hybrid["emb_norm"]
 
         pool_size = 100 if (is_hours_query or near_me) else 10
         top = hybrid.sort_values("hybrid_score", ascending=False).head(pool_size)
@@ -384,7 +392,7 @@ if query:
 
         if has_hours_status:
             st.markdown(
-                '<p class="hours-note">🟢 Open now · 🔴 Closed · ⚪ Hours unknown (only confirmed-closed places are filtered out)</p>',
+                '<p class="hours-note">🟢 Open now · 🔴 Closed · ⚪ Hours unknown (open places are ranked higher; closed places are ranked lower — nothing is filtered out)</p>',
                 unsafe_allow_html=True,
             )
 
