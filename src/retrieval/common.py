@@ -56,9 +56,11 @@ def apply_intent_boost(
     print(f"[common] Intent: {intent} ({confidence}%)")
 
     specific_categories = detect_specific_category(query)
+    guaranteed_include = False
 
     if specific_categories:
         categories = specific_categories
+        guaranteed_include = True
         print(f"[common] Specific category override: {categories}")
     elif not has_category_signal(query):
         categories = None
@@ -69,6 +71,33 @@ def apply_intent_boost(
     else:
         categories = None
         print(f"[common] Low confidence ({confidence}%) -> no boost applied")
+
+    if categories and guaranteed_include and score_col in results.columns:
+        # specific_category override is a near-certain keyword match (not a
+        # probabilistic guess), so guarantee that POIs of this category are
+        # present even if the retrieval scorer's initial candidate pool
+        # (top_k*5 by text similarity) didn't happen to surface them.
+        # This ADDS rows -- it never removes any of the original candidates,
+        # so it stays a soft mechanism, not a hard filter.
+        missing_mask = df["category_final"].isin(categories) & ~df.index.isin(results.index)
+        missing = df[missing_mask]
+
+        if not missing.empty:
+            min_score = results[score_col].min()
+            min_score = min_score if pd.notna(min_score) else 0.0
+
+            missing = missing.copy()
+            missing[score_col] = min_score
+
+            # Keep only columns that already exist in results, so concat
+            # doesn't introduce ragged/mismatched columns.
+            missing = missing[[c for c in results.columns if c in missing.columns]]
+            for col in results.columns:
+                if col not in missing.columns:
+                    missing[col] = pd.NA
+
+            results = pd.concat([results, missing[results.columns]], ignore_index=False)
+            print(f"[common] Guaranteed-included {len(missing)} additional POIs in categories: {categories}")
 
     if categories and score_col in results.columns:
         max_score = results[score_col].max()

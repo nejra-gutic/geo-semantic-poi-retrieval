@@ -48,20 +48,26 @@ QUERY_SYNONYMS = {
 INTENT_TO_CATEGORY = {
     "find_cafe":      ["cafe", "coffee", "bakery", "bar", "pub"],
     "find_food":      ["restaurant", "fast_food", "food_court", "ice_cream", "deli"],
-    "find_service":   ["pharmacy", "doctors", "bank", "hospital", "atm", "clinic",
+    "find_service":   ["pharmacy", "chemist", "doctors", "bank", "hospital", "atm", "clinic",
                        "dentist", "veterinary", "optician", "post_office",
                        "post_depot", "library", "school", "fire_station",
-                       "police", "funeral_directors"],
+                       "police", "funeral_directors",
+                       "kindergarten", "community_centre", "massage",
+                       "dry_cleaning", "laundry"],
     "find_shop":      ["convenience", "clothes", "supermarket", "furniture", "gift",
                        "hairdresser", "car_repair", "pet", "books", "electronics",
                        "bicycle", "second_hand", "variety_store", "pet_grooming",
                        "hardware", "florist", "jewelry", "shoes", "toys", "sports",
-                       "department_store", "mobile_phone", "hotel"],
+                       "department_store", "mobile_phone", "hotel",
+                       "beauty", "cannabis", "tattoo", "alcohol",
+                       "student_accommodation", "tyres"],
     "find_transport": [
         "parking", "parking_space", "parking_entrance", "bicycle_parking",
         "bicycle_rental", "charging_station", "fuel", "car_wash",
         "motorcycle_parking", "car_rental", "taxi", "bus_station"
     ],
+    "find_worship": ["place_of_worship"],
+    "find_entertainment": ["theatre", "cinema", "museum", "gallery", "attraction", "nightclub"],
 }
 
 # Words that signal the query is ABOUT a specific category of place.
@@ -93,6 +99,17 @@ CATEGORY_SIGNAL_WORDS = {
     "parking", "parkng", "transport", "bus", "taxi", "car", "bicycle",
     "bike", "charging", "charger", "fuel", "gas station", "petrol",
     "motorcycle", "vehicle",
+    # worship
+    "church", "mosque", "temple", "synagogue", "worship",
+    # entertainment
+    "theatre", "theater", "cinema", "movie", "museum", "gallery",
+    "nightclub", "club", "attraction",
+    # shop dodaci
+    "beauty", "salon", "spa", "cannabis", "dispensary", "tattoo",
+    "alcohol", "liquor", "tire", "tyre",
+    # service dodaci
+    "kindergarten", "preschool", "community center", "massage",
+    "dry cleaning", "laundry", "laundromat",
 }
 
 
@@ -109,6 +126,7 @@ def has_category_signal(query: str) -> bool:
 
 
 RESULT_COLS = [
+    "poi_id",
     "name",
     "category_final",
     "category_group",
@@ -279,6 +297,51 @@ def detect_specific_category(query: str):
 
     if "school" in q or "university" in q or "college" in q or "campus" in q:
         return ["school", "university", "college"]
+    
+    # --- NOVO: worship ---
+    if "church" in q or "mosque" in q or "temple" in q or "synagogue" in q or "worship" in q or "chapel" in q:
+        return ["place_of_worship"]
+
+    # --- NOVO: entertainment ---
+    if "theatre" in q or "theater" in q:
+        return ["theatre"]
+
+    if "cinema" in q or "movie" in q:
+        return ["cinema"]
+
+    if "museum" in q:
+        return ["museum"]
+
+    if "gallery" in q or "art exhibit" in q:
+        return ["gallery"]
+
+    if "nightclub" in q:
+        return ["nightclub"]
+
+    if "attraction" in q:
+        return ["attraction"]
+
+    # --- NOVO: beauty/tattoo/cannabis/tyres ---
+    if "tattoo" in q:
+        return ["tattoo"]
+
+    if "cannabis" in q or "dispensary" in q or "weed" in q:
+        return ["cannabis"]
+
+    if "beauty" in q or "salon" in q or "spa" in q:
+        return ["beauty"]
+
+    if "tire" in q or "tyre" in q:
+        return ["tyres"]
+
+    if "kindergarten" in q or "preschool" in q or "daycare" in q:
+        return ["kindergarten"]
+
+    if "community center" in q or "community centre" in q:
+        return ["community_centre"]
+
+    if "dry cleaning" in q or "laundromat" in q or "laundry" in q:
+        return ["dry_cleaning", "laundry"]
 
     return None
 
@@ -353,6 +416,13 @@ def search(
 ) -> pd.DataFrame:
     from src.retrieval.common import apply_intent_boost
 
+    # 0. Guard: df mora biti u istom redoslijedu/dužini kao TF-IDF matrica
+    if tfidf_matrix is not None and len(df) != tfidf_matrix.shape[0]:
+        raise ValueError(
+            f"[query] df length ({len(df)}) != tfidf_matrix rows ({tfidf_matrix.shape[0]}) "
+            f"— je li df filtriran/sortiran nakon build_tfidf()?"
+        )
+    
     # Expand synonyms before anything else
     query = expand_query_synonyms(query)
 
@@ -402,18 +472,10 @@ def search(
     extra_cols = [c for c in ["is_open_now"] if c in results.columns]
     results = results[existing_cols + extra_cols + ["similarity_score"]]
 
+
     # GEO FIRST
-    near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
-    if near_me:
-        lat = user_lat or PORTLAND_CENTER[0]
-        lon = user_lon or PORTLAND_CENTER[1]
-        if "latitude" in results.columns and "longitude" in results.columns:
-            results = combine_with_geo(
-                results,
-                lat,
-                lon,
-                score_col="similarity_score",
-            )
+    from src.retrieval.common import apply_geo_reranking
+    results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="similarity_score")
 
     # TEMP LAST
     if filters.get("open_now"):

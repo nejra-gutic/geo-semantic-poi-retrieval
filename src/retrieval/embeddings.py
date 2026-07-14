@@ -97,6 +97,9 @@ def search_embeddings(
     )
     from src.retrieval.query import parse_filters, RESULT_COLS
 
+    if len(df) != len(embeddings):
+        raise ValueError(f"[embeddings] df length ({len(df)}) != embeddings length ({len(embeddings)})")
+
     # 1. Strip temporal phrases before encoding
     query_core = get_query_core(query)
     print(f"[embeddings] Original:   '{query}'")
@@ -141,9 +144,7 @@ def search_embeddings(
     results = results[existing_cols + ["embedding_score"]]
 
     # 6. GEO FIRST
-    near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
-    if near_me:
-        results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="embedding_score")
+    results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="embedding_score")
 
     # 7. TEMP LAST
     score_col = "combined_score" if "combined_score" in results.columns else "embedding_score"

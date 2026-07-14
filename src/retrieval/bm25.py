@@ -78,6 +78,13 @@ def search_bm25(
     )
     from src.retrieval.query import parse_filters, RESULT_COLS
 
+    # 0. Guard: df mora biti u istom redoslijedu/dužini kao BM25 indeks
+    if len(df) != len(bm25_index.doc_freqs):
+        raise ValueError(
+            f"[bm25] df length ({len(df)}) != index length ({len(bm25_index.doc_freqs)}) "
+            f"— je li df filtriran/sortiran nakon build_bm25()?"
+        )
+
     # 1. Strip temporal phrases before BM25 scoring
     query_core = get_query_core(query)
     print(f"[bm25] Original:   '{query}'")
@@ -85,7 +92,7 @@ def search_bm25(
 
     # 2. BM25 scoring on ALL POIs (soft boost mode)
     print(f"[bm25] Searching all {len(df)} POIs (soft boost mode)")
-    tokenized_query = query_core.lower().split()
+    tokenized_query = _tokenize_query(query)
     all_scores = bm25_index.get_scores(tokenized_query)
 
     top_indices = np.argsort(all_scores)[::-1][:top_k * 5]
@@ -109,9 +116,7 @@ def search_bm25(
     results = results[existing_cols + ["bm25_score"]]
 
     # 5. GEO FIRST
-    near_me = any(w in query.lower() for w in ["near me", "nearby", "close by", "near downtown"])
-    if near_me:
-        results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="bm25_score")
+    results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="bm25_score")
 
     # 6. TEMP LAST
     score_col = "combined_score" if "combined_score" in results.columns else "bm25_score"

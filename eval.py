@@ -366,9 +366,11 @@ def main():
         results = hybrid.sort_values("hybrid_score", ascending=False).head(max(K_VALUES))
         results = ensure_poi_id(results)
         results = results.merge(df[["poi_id", "latitude", "longitude"]], on="poi_id", how="left")
-        from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER
-        results = combine_with_geo(
+        from src.retrieval.common import apply_geo_reranking
+        from src.retrieval.geo import PORTLAND_CENTER
+        results = apply_geo_reranking(
             results,
+            query,
             PORTLAND_CENTER[0],
             PORTLAND_CENTER[1],
             score_col="hybrid_score",

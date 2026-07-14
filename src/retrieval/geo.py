@@ -95,15 +95,20 @@ def combine_with_geo(
 
     results = results.copy()
 
-    # 1. Semantic scores normalizacija
-    sem_scores = results[score_col].copy()
-    if sem_scores.max() > sem_scores.min():
-        sem_scores = (sem_scores - sem_scores.min()) / (sem_scores.max() - sem_scores.min())
+    # 1. Semantic score -- NE koristimo min-max po trenutnom skupu kandidata.
+    #    Kad su svi kandidati semanticki slicni (npr. svi su "coffee shop" za
+    #    query "coffee near me"), min-max razvlaci beznacajnu razliku (npr.
+    #    0.616 vs 0.655) na puni 0-1 raspon, pa jedan POI ispadne "los" a drugi
+    #    "savrsen" iako su sustinski isti kvalitet matcha. Cosine slicnost je
+    #    empirijski uvijek u [0,1] za ovaj model (all-MiniLM-L6-v2) -- vidi
+    #    provjeru u chatu: raspon 0.278-0.656 preko razlicitih query-ja, nikad
+    #    negativno. Clip je samo defanzivan safety-net, ne stvarna normalizacija.
+    sem_scores = results[score_col].clip(lower=0, upper=1)
 
-    # 2. Geo scores normalizacija
+    # 2. Geo score je vec prirodno u [0,1] (formula 1/(1+decay*dist) to
+    #    garantuje: 1.0 na distanci 0, opada ka 0 sa udaljenoscu) -- ne treba
+    #    mu dodatna min-max normalizacija iz istog razloga kao gore.
     geo_scores = compute_geo_scores(results, user_lat, user_lon, decay=decay)
-    if geo_scores.max() > geo_scores.min():
-        geo_scores = (geo_scores - geo_scores.min()) / (geo_scores.max() - geo_scores.min())
 
     # 3. Kombiniraj
     results["geo_score"] = geo_scores

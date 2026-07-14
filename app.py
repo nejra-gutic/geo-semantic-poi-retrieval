@@ -206,7 +206,8 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
     from sklearn.preprocessing import MinMaxScaler
     from src.retrieval.bm25 import search_bm25
     from src.retrieval.embeddings import search_embeddings
-    from src.retrieval.geo import combine_with_geo, haversine_distance
+    from src.retrieval.common import apply_geo_reranking
+    from src.retrieval.geo import haversine_distance
     from src.retrieval.query import search
     from src.retrieval.hours import is_open_now
 
@@ -233,20 +234,37 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
 
     elif method == "Embeddings":
         pool_size = 100 if is_hours_query else 10
-        results = search_embeddings(query, embedding_model, poi_embeddings, df, top_k=pool_size)
+        results = search_embeddings(
+            query, embedding_model, poi_embeddings, df,
+            top_k=pool_size,
+            intent_model=intent_model,
+            intent_vectorizer=intent_vectorizer,
+            user_lat=user_lat,
+            user_lon=user_lon,
+        )
         if is_hours_query and "opening_hours" in results.columns:
             from src.retrieval.query import apply_open_now_filter
-            results = apply_open_now_filter(results, query=query, boost_pct=0.2, score_col="embedding_score")
+            score_col = "combined_score" if "combined_score" in results.columns else "embedding_score"
+            results = apply_open_now_filter(results, query=query, boost_pct=0.2, score_col=score_col)
         results = results.head(10)
 
     elif method == "Hybrid":
-        bm25_results = search_bm25(query, bm25, df, top_k=200)
-        emb_results = search_embeddings(query, embedding_model, poi_embeddings, df, top_k=200)
+        bm25_results = search_bm25(
+            query, bm25, df, top_k=200,
+            intent_model=intent_model,
+            intent_vectorizer=intent_vectorizer,
+        )
+        emb_results = search_embeddings(
+            query, embedding_model, poi_embeddings, df, top_k=200,
+            intent_model=intent_model,
+            intent_vectorizer=intent_vectorizer,
+        )
 
         bm25_results = bm25_results.copy()
         emb_results = emb_results.copy()
-        bm25_results["poi_id"] = bm25_results.index
-        emb_results["poi_id"] = emb_results.index
+        # poi_id already present correctly on both (search_bm25/search_embeddings
+        # include it via RESULT_COLS) -- do NOT overwrite with .index, that was
+        # the source of a silent ID-misalignment bug for the embeddings side.
 
         score_col = [c for c in bm25_results.columns if "score" in c.lower()]
         if score_col:
@@ -271,16 +289,15 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             hybrid["emb_norm"] = 0
 
         hybrid["hybrid_score"] = 0.2 * hybrid["bm25_norm"] + 0.8 * hybrid["emb_norm"]
-        near_me = any(w in q for w in ["near me", "nearby", "close by"])
+        near_me = any(w in q for w in ["near me", "nearby", "close by", "near downtown"])
 
         pool_size = 100 if (is_hours_query or near_me) else 10
         top = hybrid.sort_values("hybrid_score", ascending=False).head(pool_size)
 
-        results = df.loc[df.index.isin(top["poi_id"])].copy()
-        results = results.merge(top[["poi_id", "hybrid_score"]], left_index=True, right_on="poi_id", how="left")
+        results = df.loc[df["poi_id"].isin(top["poi_id"])].copy()
+        results = results.merge(top[["poi_id", "hybrid_score"]], on="poi_id", how="left")
 
-        if near_me and "latitude" in results.columns and "longitude" in results.columns:
-            results = combine_with_geo(results, user_lat, user_lon, score_col="hybrid_score")
+        results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="hybrid_score")
 
         if is_hours_query and "opening_hours" in results.columns:
             from src.retrieval.query import apply_open_now_filter
