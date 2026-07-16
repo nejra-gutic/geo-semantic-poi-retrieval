@@ -39,7 +39,7 @@ def compute_geo_scores(
     df: pd.DataFrame,
     user_lat: float,
     user_lon: float,
-    decay: float = 0.1,
+    decay: float = 1.5,
 ) -> pd.Series:
     """
     Compute geo scores for all POIs based on distance from user location.
@@ -72,7 +72,7 @@ def combine_with_geo(
     semantic_weight: float = 0.5,
     geo_weight: float = 0.5,
     score_col: str = "embedding_score",
-    decay: float = 0.1,
+    decay: float = 1.5,
 ) -> pd.DataFrame:
     """
     Combine semantic scores with geo scores for re-ranking.

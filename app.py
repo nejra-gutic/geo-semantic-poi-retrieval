@@ -220,7 +220,13 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
 
     # FIX: near_me se sad računa jednom na vrhu, koristi se i za
     # Embeddings i za Hybrid granu (prije je postojao samo unutar Hybrid)
-    near_me = any(w in q for w in ["near me", "nearby", "close by", "near downtown"])
+    # FIX: dodano "nearest"/"closest" -- ista dopuna koju smo večeras uveli
+    # u GEO_KEYWORDS (fix_geo_labels_by_distance.py) nakon što je "nearest
+    # pharmacy open now" tip upita promakao kroz stariju, užu listu
+    near_me = any(w in q for w in [
+        "near me", "nearby", "close by", "near downtown", "near city center",
+        "nearest", "closest",
+    ])
 
     if method == "TF-IDF":
         results = search(
@@ -260,12 +266,14 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             query, bm25, df, top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            apply_geo=False,
             apply_temporal=False,
         )
         emb_results = search_embeddings(
             query, embedding_model, poi_embeddings, df, top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            apply_geo=False,
             apply_temporal=False,
         )
 
@@ -333,6 +341,33 @@ def run_search(query, df, intent_model, intent_vectorizer, vectorizer, tfidf_mat
             lambda h: is_open_now(h) if pd.notna(h) else None
         )
 
+    # FIX: soft penalty za POI-je bez imena (name=="unknown") -- kategorijski
+    # boost ih inace moze gurnuti na vrh ispred imenovanih POI-ja iste
+    # kategorije, iako nemaju nikakav razlikujuci tekst. Post-hoc re-sort,
+    # ne dira retrieval internals (common.py/bm25.py/embeddings.py).
+    if not results.empty and "name" in results.columns:
+        score_col_found = next(
+            (c for c in ["combined_score", "hybrid_score", "embedding_score", "similarity_score"]
+             if c in results.columns), None
+        )
+        if score_col_found:
+            results = results.copy()
+            max_score = results[score_col_found].max()
+            penalty = max_score * 0.05 if pd.notna(max_score) else 0.0
+            is_unknown = results["name"].astype(str).str.lower() == "unknown"
+            results[score_col_found] = results[score_col_found] - is_unknown.map({True: penalty, False: 0.0})
+            results = results.sort_values(score_col_found, ascending=False)
+
+    # FIX: ako query eksplicitno trazi "nearest"/"closest", blendovani score
+    # (kategorijski boost + geo, 50/50) ne garantuje da ce najblizi POI
+    # zavrsiti na vrhu -- jak kategorijski boost moze nadjacati geo razliku.
+    # Za ove upite, force-sortiraj finalni prikaz direktno po distance_km,
+    # da "closest"/"nearest" doslovno znaci sortirano po udaljenosti.
+    explicit_distance_sort = any(w in q for w in ["nearest", "closest"])
+    if explicit_distance_sort and not results.empty and "distance_km" in results.columns:
+        results = results.copy()
+        results = results.sort_values("distance_km", ascending=True, na_position="last")
+
     return results
 
 
@@ -377,6 +412,12 @@ if query:
             vectorizer, tfidf_matrix, bm25, embedding_model, poi_embeddings,
             method, user_lat, user_lon,
         )
+
+    # FIX: run_search() računa explicit_distance_sort samo interno (lokalna
+    # varijabla, nikad se ne vraća) -- treba je ponovo izračunati ovdje jer
+    # se koristi niže u prikazu tabele, van scope-a funkcije. Ovo je bio
+    # uzrok "NameError: name 'explicit_distance_sort' is not defined".
+    explicit_distance_sort = any(w in query.lower() for w in ["nearest", "closest"])
 
     if results is None or results.empty:
         st.warning("No results found. Try a different query.")
@@ -476,7 +517,7 @@ if query:
         display_cols = ["name", "category_final", "addr:street", "distance_km"]
         if has_hours_status:
             display_cols.append("Hours")
-        if score_col:
+        if score_col and not explicit_distance_sort:
             display_cols.append(score_col)
             results = results.sort_values(score_col, ascending=False)
 

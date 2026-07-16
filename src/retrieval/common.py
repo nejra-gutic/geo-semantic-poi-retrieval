@@ -153,10 +153,19 @@ def apply_geo_reranking(
     """Apply geo re-ranking if query signals near me/nearby intent."""
     from src.retrieval.geo import combine_with_geo, PORTLAND_CENTER
 
-    near_me = any(
-        w in query.lower()
-        for w in ["near me", "nearby", "close by", "near downtown"]
-    )
+    GEO_KEYWORDS = [
+    "near me",
+    "nearby",
+    "close by",
+    "near downtown",
+    "near city center",
+    "nearest",
+    "closest",
+]
+
+    near_me = any(w in query.lower() for w in GEO_KEYWORDS)
+
+    
     if not near_me:
         return results
 

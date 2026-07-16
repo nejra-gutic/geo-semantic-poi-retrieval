@@ -3,24 +3,29 @@ eval.py
 -------
 Standalone evaluation script for TF-IDF, BM25, Embeddings, Hybrid, and RRF retrieval.
 Uses per-query relevance labels from:
-    data/relevance_labels_test.csv
+    data/relevance_labels_expanded_v5.csv
+
+FIXED_CHECK_TIME: a single, hardcoded reference moment used for ALL temporal
+("open now"/"open late"/etc.) queries -- both when relevance labels were
+generated (see fix_temporal_labels_v2.py) and here during evaluation. Using
+one fixed constant (instead of per-query resolved times) keeps eval.py's
+diff minimal and avoids the desync risk of threading a different check_time
+through every retrieval call.
+
 Run:
     python3 eval.py
 """
 import contextlib
 import io
+from datetime import datetime
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 from src.utils.io import load_csv
 from src.retrieval import pipeline, tfidf
-from src.retrieval.intent_classifier import load_model, predict
+from src.retrieval.intent_classifier import load_model
 from src.retrieval.bm25 import build_bm25, search_bm25
-from src.retrieval.query import (
-    search,
-    INTENT_TO_CATEGORY,
-    detect_specific_category,
-)
+from src.retrieval.query import search, parse_filters, apply_open_now_filter
 from src.retrieval.embeddings import (
     load_embedding_model,
     get_or_build_embeddings,
@@ -32,6 +37,12 @@ RELEVANCE_PATH = "data/relevance_labels_expanded_v2.csv"
 INTENT_MODEL_PATH = "models/intent_classifier.pkl"
 EMBEDDINGS_PATH = "models/poi_embeddings.npy"
 K_VALUES = [5, 10, 20, 50]
+BM25_WEIGHT = 0.1
+EMBEDDING_WEIGHT = 0.9
+
+# MUST match the constant in fix_temporal_labels_v2.py exactly --
+# same reference moment used to build temporal relevance labels.
+FIXED_CHECK_TIME = datetime(2026, 7, 15, 14, 0, 0)
 
 
 def load_relevance_labels(path: str) -> dict:
@@ -70,14 +81,8 @@ def ndcg_at_k(retrieved_ids: list, relevant_ids: set, k: int) -> float:
     top_k = retrieved_ids[:k]
     relevance = [1 if pid in relevant_ids else 0 for pid in top_k]
     dcg = sum(rel / np.log2(i + 2) for i, rel in enumerate(relevance))
-
-    # IDCG must reflect the best possible ranking given the TRUE number of
-    # relevant docs (capped at k) -- not just those the system happened to
-    # retrieve. Sorting only top_k's binary relevance understates IDCG when
-    # the system misses relevant docs, which artificially inflates NDCG.
     ideal_hits = min(len(relevant_ids), k)
     idcg = sum(1 / np.log2(i + 2) for i in range(ideal_hits))
-
     return dcg / idcg if idcg > 0 else 0.0
 
 
@@ -99,6 +104,40 @@ def ensure_poi_id(results: pd.DataFrame) -> pd.DataFrame:
             results["poi_id"] = results.index
     results["poi_id"] = results["poi_id"].astype(int)
     return results
+
+
+def apply_temporal_once(
+    results: pd.DataFrame,
+    query: str,
+    score_col: str,
+    df: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Apply the temporal open/closed adjustment exactly once, after component
+    rankings have been merged.
+
+    Non-temporal queries are returned unchanged.
+    """
+    filters = parse_filters(query)
+    if not filters.get("open_now") or results.empty:
+        return results
+
+    results = ensure_poi_id(results)
+
+    if "opening_hours" not in results.columns:
+        results = results.merge(
+            df[["poi_id", "opening_hours"]],
+            on="poi_id",
+            how="left",
+        )
+
+    return apply_open_now_filter(
+        results,
+        query=query,
+        check_time=FIXED_CHECK_TIME,
+        boost_pct=0.2,
+        score_col=score_col,
+    )
 
 
 def evaluate(
@@ -192,10 +231,13 @@ def main():
     relevance_labels = load_relevance_labels(RELEVANCE_PATH)
     queries = list(relevance_labels.keys())
     print(f"[eval] {len(queries)} queries loaded")
+    print(f"[eval] Using FIXED_CHECK_TIME={FIXED_CHECK_TIME} for all temporal queries")
 
     # ------------------------------------------------------------------ #
     # Retrieval functions — all use soft boost (no hard filtering)
-    # intent_model/intent_vectorizer passed to all methods for consistency
+    # check_time=FIXED_CHECK_TIME passed unconditionally: harmless for
+    # non-temporal queries (only used internally if the query's parsed
+    # filters include open_now), consistent for temporal ones.
     # ------------------------------------------------------------------ #
 
     def tfidf_with_boost(query):
@@ -207,6 +249,7 @@ def main():
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
             top_k=max(K_VALUES),
+            check_time=FIXED_CHECK_TIME,
         )
         return ensure_poi_id(results)
 
@@ -229,6 +272,7 @@ def main():
             top_k=max(K_VALUES),
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
         )
         return ensure_poi_id(results)
 
@@ -250,6 +294,7 @@ def main():
             top_k=max(K_VALUES),
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
         )
         return ensure_poi_id(results)
 
@@ -271,6 +316,9 @@ def main():
             top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
+            apply_geo=False,
+            apply_temporal=False,
         )
         emb_results = search_embeddings(
             query,
@@ -280,6 +328,9 @@ def main():
             top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
+            apply_geo=False,
+            apply_temporal=False,
         )
         bm25_results = ensure_poi_id(bm25_results)
         emb_results = ensure_poi_id(emb_results)
@@ -306,10 +357,17 @@ def main():
         else:
             hybrid["emb_norm"] = 0
         hybrid["hybrid_score"] = (
-            0.2 * hybrid["bm25_norm"]
-            + 0.8 * hybrid["emb_norm"]
+            BM25_WEIGHT * hybrid["bm25_norm"]
+            + EMBEDDING_WEIGHT * hybrid["emb_norm"]
         )
-        results = hybrid.sort_values("hybrid_score", ascending=False).head(max(K_VALUES))
+        results = hybrid.sort_values("hybrid_score", ascending=False)
+        results = apply_temporal_once(
+            results,
+            query=query,
+            score_col="hybrid_score",
+            df=df,
+        )
+        results = results.head(max(K_VALUES))
         print(f"[hybrid] Query: '{query}' → {len(results)} results")
         return results
 
@@ -321,6 +379,9 @@ def main():
             top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
+            apply_geo=False,
+            apply_temporal=False,
         )
         emb_results = search_embeddings(
             query,
@@ -330,6 +391,9 @@ def main():
             top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
+            apply_geo=False,
+            apply_temporal=False,
         )
         bm25_results = ensure_poi_id(bm25_results)
         emb_results = ensure_poi_id(emb_results)
@@ -343,7 +407,14 @@ def main():
             "poi_id": list(scores.keys()),
             "rrf_score": list(scores.values()),
         })
-        results = rrf_df.sort_values("rrf_score", ascending=False).head(max(K_VALUES))
+        results = rrf_df.sort_values("rrf_score", ascending=False)
+        results = apply_temporal_once(
+            results,
+            query=query,
+            score_col="rrf_score",
+            df=df,
+        )
+        results = results.head(max(K_VALUES))
         print(f"[rrf] Query: '{query}' → {len(results)} results")
         return results
 
@@ -352,11 +423,17 @@ def main():
             query, bm25, df, top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
+            apply_geo=False,
+            apply_temporal=False,
         )
         emb_results = search_embeddings(
             query, embedding_model, poi_embeddings, df, top_k=200,
             intent_model=intent_model,
             intent_vectorizer=intent_vectorizer,
+            check_time=FIXED_CHECK_TIME,
+            apply_geo=False,
+            apply_temporal=False,
         )
         bm25_results = ensure_poi_id(bm25_results)
         emb_results = ensure_poi_id(emb_results)
@@ -377,8 +454,11 @@ def main():
             hybrid["emb_norm"] = MinMaxScaler().fit_transform(hybrid[["embedding_score"]])
         else:
             hybrid["emb_norm"] = 0
-        hybrid["hybrid_score"] = 0.1 * hybrid["bm25_norm"] + 0.9 * hybrid["emb_norm"]
-        results = hybrid.sort_values("hybrid_score", ascending=False).head(max(K_VALUES))
+        hybrid["hybrid_score"] = (
+            BM25_WEIGHT * hybrid["bm25_norm"]
+            + EMBEDDING_WEIGHT * hybrid["emb_norm"]
+        )
+        results = hybrid.sort_values("hybrid_score", ascending=False)
         results = ensure_poi_id(results)
         results = results.merge(df[["poi_id", "latitude", "longitude"]], on="poi_id", how="left")
         from src.retrieval.common import apply_geo_reranking
@@ -390,6 +470,18 @@ def main():
             PORTLAND_CENTER[1],
             score_col="hybrid_score",
         )
+        geo_score_col = (
+            "combined_score"
+            if "combined_score" in results.columns
+            else "hybrid_score"
+        )
+        results = apply_temporal_once(
+            results,
+            query=query,
+            score_col=geo_score_col,
+            df=df,
+        )
+        results = results.head(max(K_VALUES))
         print(f"[hybrid_geo] Query: '{query}' → {len(results)} results")
         return results
 
@@ -397,77 +489,15 @@ def main():
     # Run evaluations
     # ------------------------------------------------------------------ #
 
-    evaluate(
-        "TF-IDF (with soft boost)",
-        queries,
-        relevance_labels,
-        tfidf_with_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "TF-IDF (no boost)",
-        queries,
-        relevance_labels,
-        tfidf_no_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "BM25 (with soft boost)",
-        queries,
-        relevance_labels,
-        bm25_with_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "BM25 (no boost)",
-        queries,
-        relevance_labels,
-        bm25_no_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "Embeddings (with soft boost)",
-        queries,
-        relevance_labels,
-        embeddings_with_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "Embeddings (no boost)",
-        queries,
-        relevance_labels,
-        embeddings_no_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "Hybrid BM25+Embeddings (with soft boost)",
-        queries,
-        relevance_labels,
-        hybrid_with_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "RRF BM25+Embeddings (with soft boost)",
-        queries,
-        relevance_labels,
-        rrf_with_boost,
-        K_VALUES,
-    )
-
-    evaluate(
-        "Hybrid + Geo (with soft boost)",
-        queries,
-        relevance_labels,
-        hybrid_geo,
-        K_VALUES,
-    )
+    evaluate("TF-IDF (with soft boost)", queries, relevance_labels, tfidf_with_boost, K_VALUES)
+    evaluate("TF-IDF (no boost)", queries, relevance_labels, tfidf_no_boost, K_VALUES)
+    evaluate("BM25 (with soft boost)", queries, relevance_labels, bm25_with_boost, K_VALUES)
+    evaluate("BM25 (no boost)", queries, relevance_labels, bm25_no_boost, K_VALUES)
+    evaluate("Embeddings (with soft boost)", queries, relevance_labels, embeddings_with_boost, K_VALUES)
+    evaluate("Embeddings (no boost)", queries, relevance_labels, embeddings_no_boost, K_VALUES)
+    evaluate("Hybrid BM25+Embeddings (with soft boost)", queries, relevance_labels, hybrid_with_boost, K_VALUES)
+    evaluate("RRF BM25+Embeddings (with soft boost)", queries, relevance_labels, rrf_with_boost, K_VALUES)
+    evaluate("Hybrid + Geo (with soft boost)", queries, relevance_labels, hybrid_geo, K_VALUES)
 
 
 if __name__ == "__main__":

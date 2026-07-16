@@ -316,6 +316,16 @@ def detect_specific_category(query: str):
 
     if "dry cleaning" in q or "laundromat" in q or "laundry" in q:
         return ["dry_cleaning", "laundry"]
+    
+    if "urgent care" in q:
+        return ["clinic", "hospital", "doctors"]
+
+    if any(w in q for w in [
+        "taco", "burger", "pizza", "sushi", "ramen", "kebab", "bbq",
+        "seafood", "chinese food", "thai food", "italian restaurant",
+        "mexican food", "indian food", "fried chicken",
+    ]):
+        return ["restaurant", "fast_food"]
 
     return None
 

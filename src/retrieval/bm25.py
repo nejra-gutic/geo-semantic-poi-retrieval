@@ -68,9 +68,14 @@ def search_bm25(
     user_lat: float = None,
     user_lon: float = None,
     check_time=None,
+    apply_geo: bool = True,
     apply_temporal: bool = True,
 ) -> pd.DataFrame:
     """
+    apply_geo: if False, skips geo re-ranking. Use False when this output
+    will be fused into a Hybrid result and geo will be applied once
+    after fusion.
+
     apply_temporal: if False, skips the temporal/open_now boost step.
     Set to False when this function's output is going to be merged into a
     Hybrid result (e.g. in app.py), so the temporal boost is applied exactly
@@ -122,8 +127,11 @@ def search_bm25(
     existing_cols = [col for col in RESULT_COLS if col in results.columns]
     results = results[existing_cols + ["bm25_score"]]
 
-    # 5. GEO FIRST
-    results = apply_geo_reranking(results, query, user_lat, user_lon, score_col="bm25_score")
+    # 5. GEO FIRST (optional; disable when feeding a Hybrid fusion)
+    if apply_geo:
+        results = apply_geo_reranking(
+            results, query, user_lat, user_lon, score_col="bm25_score"
+        )
 
     # 6. TEMP LAST (skip if this call feeds into a Hybrid merge downstream)
     if apply_temporal:
